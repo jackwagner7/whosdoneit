@@ -1,0 +1,47 @@
+.picker-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  place-items: center;
+  gap: 1rem;
+}
+
+.picker-circle {
+  height: 4.25rem;
+  width: 4.25rem;
+  border-radius: 9999px;
+  border: 2px solid #e2e8f0;
+  transition: all 140ms ease;
+}
+
+.picker-circle:hover {
+  transform: scale(1.03);
+}
+
+.picker-circle-selected {
+  border-color: #0f172a;
+  box-shadow: 0 0 0 2px #94a3b8;
+}
+
+.picker-circle-muted {
+  opacity: 0.35;
+}
+
+.picker-emoji {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  background: #ffffff;
+}
+
+.picker-emoji-selected {
+  background: #f1f5f9;
+}
+
+.picker-refresh {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #ffffff;
+  color: #475569;
+}

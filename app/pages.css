@@ -1,0 +1,77 @@
+.app-page {
+  min-height: 100svh;
+  background: #f1f5f9;
+  color: #0f172a;
+  padding: 0.75rem;
+}
+
+.app-page-card {
+  margin: 0 auto;
+  max-width: 28rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 1.5rem;
+  background: #ffffff;
+  padding: 1rem;
+  box-shadow: 0 1px 2px 0 rgb(15 23 42 / 0.08);
+}
+
+.app-page-card-wide {
+  max-width: 36rem;
+}
+
+.app-page-card-mobile-fill {
+  min-height: calc(100svh - 1.5rem);
+}
+
+.app-page-content {
+  margin: 0 auto;
+  max-width: 36rem;
+}
+
+.player-box {
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #f1f5f9;
+  padding: 0.65rem 1.1rem;
+  box-shadow: 0 8px 20px -14px rgb(15 23 42 / 0.45);
+}
+
+.player-box-floating {
+  margin: 0 auto;
+  width: min(19rem, 100%);
+}
+
+.player-box-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #475569;
+  text-align: center;
+}
+
+.player-box-value {
+  margin-top: 0.15rem;
+  text-align: center;
+  font-size: 1.2rem;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.player-box-emoji {
+  margin-left: 0.35rem;
+}
+
+@media (min-width: 640px) {
+  .app-page {
+    padding: 1rem;
+  }
+
+  .app-page-card {
+    padding: 1.5rem;
+  }
+
+  .app-page-card-mobile-fill {
+    min-height: 80vh;
+  }
+}
