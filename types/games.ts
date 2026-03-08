@@ -1,5 +1,6 @@
 export type GamePhase =
   | "lobby"
+  | "prompting"
   | "answering"
   | "guessing"
   | "revealing"
@@ -13,6 +14,8 @@ export type Room = {
   current_prompt_index: number;
   reveal_player_index: number;
   reveal_truth_visible: boolean;
+  prompt_seconds: number;
+  round_count: number;
   answering_seconds: number;
   guessing_seconds: number;
   reveal_seconds: number;
@@ -69,6 +72,8 @@ export type GameSnapshot = {
 };
 
 export type RoomSettings = {
+  promptSeconds: number;
+  roundCount: number;
   answeringSeconds: number;
   guessingSeconds: number;
   revealSeconds: number;

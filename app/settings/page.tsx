@@ -85,7 +85,7 @@ export default function SettingsPage() {
 
         <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 p-3 sm:static sm:mt-4 sm:border-0 sm:bg-transparent sm:p-0">
           <button
-            className="w-full rounded-2xl bg-slate-900 px-5 py-3 text-xl font-bold text-white disabled:opacity-50 sm:text-2xl"
+            className="w-full rounded-2xl bg-black px-5 py-3 text-xl font-bold text-white disabled:opacity-50 sm:text-2xl"
             disabled={!name.trim()}
             onClick={handleSave}
             type="button"

@@ -38,7 +38,7 @@ export function LeaderboardStage({
       </ol>
       <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 p-3">
         <button
-          className="w-full rounded-2xl bg-slate-900 px-4 py-3 text-xl font-bold text-white disabled:opacity-60"
+          className="w-full rounded-2xl bg-black px-4 py-3 text-xl font-bold text-white disabled:opacity-60"
           disabled={busy}
           onClick={() => void onContinue()}
           type="button"

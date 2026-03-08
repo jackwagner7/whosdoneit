@@ -7,14 +7,18 @@ create table if not exists public.rooms (
   current_prompt_index integer not null default 0,
   reveal_player_index integer not null default 0,
   reveal_truth_visible boolean not null default false,
+  prompt_seconds integer not null default 20,
+  round_count integer not null default 1,
   answering_seconds integer not null default 25,
   guessing_seconds integer not null default 35,
   reveal_seconds integer not null default 8,
   phase_deadline_at timestamptz,
   created_at timestamptz not null default now(),
   constraint rooms_phase_check check (
-    phase in ('lobby', 'answering', 'guessing', 'revealing', 'leaderboard', 'finished')
+    phase in ('lobby', 'prompting', 'answering', 'guessing', 'revealing', 'leaderboard', 'finished')
   ),
+  constraint rooms_prompt_seconds_check check (prompt_seconds between 5 and 180),
+  constraint rooms_round_count_check check (round_count between 1 and 10),
   constraint rooms_answering_seconds_check check (answering_seconds between 5 and 180),
   constraint rooms_guessing_seconds_check check (guessing_seconds between 5 and 180),
   constraint rooms_reveal_seconds_check check (reveal_seconds between 5 and 180)

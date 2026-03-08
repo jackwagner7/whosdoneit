@@ -1,16 +1,24 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { AppBanner } from "@/components/app-banner";
 import { AnsweringStage } from "@/components/room/answering-stage";
+import { EntryProfileForm } from "@/components/entry-profile-form";
 import { FinishedStage } from "@/components/room/finished-stage";
 import { GuessingStage } from "@/components/room/guessing-stage";
-import { JoinInline } from "@/components/room/join-inline";
 import { LeaderboardStage } from "@/components/room/leaderboard-stage";
 import { LobbyStage } from "@/components/room/lobby-stage";
+import { ProfileSettingsSheet } from "@/components/room/profile-settings-sheet";
+import { PromptingStage } from "@/components/room/prompting-stage";
 import { RevealingStage } from "@/components/room/revealing-stage";
 import { SettingsSheet } from "@/components/room/settings-sheet";
 import {
   advanceReveal,
+  buildColorChoices,
+  buildEmojiChoices,
+  DEFAULT_PLAYER_COLOR,
+  DEFAULT_PLAYER_EMOJI,
   getGameSnapshotByCode,
   getRoundProgress,
   joinRoom,
@@ -22,22 +30,31 @@ import {
   submitGuess,
   submitPrompt,
   subscribeToRoom,
+  updatePlayerProfile,
   updateRoomSettings,
 } from "@/lib/game";
 import {
   getStoredPlayerPreferences,
   setStoredPlayerPreferences,
 } from "@/lib/player-preferences";
-import type { GamePhase, GameSnapshot, Player } from "@/types/games";
+import type { GameSnapshot, Player } from "@/types/games";
 
 type RoomClientProps = {
   code: string;
 };
 
 type SettingsDraft = {
+  promptSeconds: number;
+  roundCount: number;
   answeringSeconds: number;
   guessingSeconds: number;
   revealSeconds: number;
+};
+
+type ProfileDraft = {
+  name: string;
+  color: string;
+  emoji: string;
 };
 
 function sortLeaderboard(players: Player[]) {
@@ -46,27 +63,9 @@ function sortLeaderboard(players: Player[]) {
   );
 }
 
-function phaseSymbol(phase: GamePhase) {
-  switch (phase) {
-    case "lobby":
-      return "?";
-    case "answering":
-      return "!";
-    case "guessing":
-      return "#";
-    case "revealing":
-      return "*";
-    case "leaderboard":
-      return "+";
-    case "finished":
-      return "=";
-    default:
-      return ".";
-  }
-}
-
 export function RoomClient({ code }: RoomClientProps) {
   const normalizedCode = code.toUpperCase();
+  const router = useRouter();
   const [playerId, setPlayerId] = useState<string | null>(null);
   const [snapshot, setSnapshot] = useState<GameSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
@@ -78,8 +77,28 @@ export function RoomClient({ code }: RoomClientProps) {
   const [promptText, setPromptText] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsSaving, setSettingsSaving] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
   const [joinDefaults] = useState(() => getStoredPlayerPreferences());
+  const [profileDraft, setProfileDraft] = useState<ProfileDraft>({
+    name: joinDefaults.name,
+    color: joinDefaults.color || DEFAULT_PLAYER_COLOR,
+    emoji: joinDefaults.emoji || DEFAULT_PLAYER_EMOJI,
+  });
+  const [profileColorOptions, setProfileColorOptions] = useState<string[]>(() =>
+    buildColorChoices({
+      selectedColor: joinDefaults.color || DEFAULT_PLAYER_COLOR,
+    }),
+  );
+  const [profileEmojiOptions, setProfileEmojiOptions] = useState<string[]>(() =>
+    buildEmojiChoices({
+      selectedEmoji: joinDefaults.emoji || DEFAULT_PLAYER_EMOJI,
+    }),
+  );
   const [settingsDraft, setSettingsDraft] = useState<SettingsDraft>({
+    promptSeconds: 20,
+    roundCount: 1,
     answeringSeconds: 25,
     guessingSeconds: 35,
     revealSeconds: 8,
@@ -132,6 +151,7 @@ export function RoomClient({ code }: RoomClientProps) {
     }
 
     if (
+      snapshot.room.phase !== "prompting" &&
       snapshot.room.phase !== "answering" &&
       snapshot.room.phase !== "guessing" &&
       snapshot.room.phase !== "revealing"
@@ -182,6 +202,12 @@ export function RoomClient({ code }: RoomClientProps) {
     }
   }, [myPrompt, promptText]);
 
+  useEffect(() => {
+    if (snapshot?.room.phase === "prompting" && !myPrompt) {
+      setPromptText("");
+    }
+  }, [myPrompt, snapshot?.room.phase]);
+
   const round = useMemo(
     () => (snapshot ? getRoundProgress(snapshot) : null),
     [snapshot],
@@ -190,6 +216,39 @@ export function RoomClient({ code }: RoomClientProps) {
     () => (snapshot ? sortLeaderboard(snapshot.players) : []),
     [snapshot],
   );
+  const takenColorsForProfile = useMemo(() => {
+    if (!snapshot || !me) {
+      return [] as string[];
+    }
+    return snapshot.players
+      .filter((player) => player.id !== me.id)
+      .map((player) => player.color);
+  }, [me, snapshot]);
+
+  const openProfileSettings = useCallback(() => {
+    if (!me) {
+      return;
+    }
+
+    setProfileError(null);
+    setProfileDraft({
+      name: me.name,
+      color: me.color || DEFAULT_PLAYER_COLOR,
+      emoji: me.emoji || DEFAULT_PLAYER_EMOJI,
+    });
+    setProfileColorOptions(
+      buildColorChoices({
+        selectedColor: me.color,
+        takenColors: takenColorsForProfile,
+      }),
+    );
+    setProfileEmojiOptions(
+      buildEmojiChoices({
+        selectedEmoji: me.emoji,
+      }),
+    );
+    setProfileOpen(true);
+  }, [me, takenColorsForProfile]);
 
   const runAction = useCallback(
     async (actionKey: string, fn: () => Promise<void>) => {
@@ -213,12 +272,22 @@ export function RoomClient({ code }: RoomClientProps) {
   );
 
   const handleInlineJoin = useCallback(
-    async (name: string, color: string, emoji: string) => {
+    async (values: { code: string; name: string; color: string; emoji: string }) => {
+      const targetCode = values.code.trim().toUpperCase();
+      if (!targetCode || !values.name.trim()) {
+        return;
+      }
+
       setJoinLoading(true);
       setJoinError(null);
 
       try {
-        const { room, player } = await joinRoom(normalizedCode, name, color, emoji);
+        const { room, player } = await joinRoom(
+          targetCode,
+          values.name,
+          values.color,
+          values.emoji,
+        );
         setStoredPlayerPreferences({
           name: player.name,
           color: player.color,
@@ -226,6 +295,11 @@ export function RoomClient({ code }: RoomClientProps) {
         });
         localStorage.setItem("playerId", player.id);
         localStorage.setItem(`playerId:${room.code}`, player.id);
+        if (room.code !== normalizedCode) {
+          router.push(`/room/${room.code}`);
+          return;
+        }
+
         setPlayerId(player.id);
         await loadSnapshot();
       } catch (joinIssue) {
@@ -234,11 +308,13 @@ export function RoomClient({ code }: RoomClientProps) {
         setJoinLoading(false);
       }
     },
-    [loadSnapshot, normalizedCode],
+    [loadSnapshot, normalizedCode, router],
   );
 
   const handleSaveSettings = useCallback(
     async (settings: {
+      promptSeconds: number;
+      roundCount: number;
       answeringSeconds: number;
       guessingSeconds: number;
       revealSeconds: number;
@@ -262,11 +338,83 @@ export function RoomClient({ code }: RoomClientProps) {
     [loadSnapshot, me, snapshot],
   );
 
+  const refreshProfileColors = useCallback(() => {
+    setProfileColorOptions((previousOptions) => {
+      const nextOptions = buildColorChoices({
+        selectedColor: profileDraft.color,
+        previousChoices: previousOptions,
+        takenColors: takenColorsForProfile,
+      });
+
+      if (!nextOptions.includes(profileDraft.color)) {
+        setProfileDraft((current) => ({
+          ...current,
+          color: nextOptions[0] ?? DEFAULT_PLAYER_COLOR,
+        }));
+      }
+
+      return nextOptions;
+    });
+  }, [profileDraft.color, takenColorsForProfile]);
+
+  const refreshProfileEmojis = useCallback(() => {
+    setProfileEmojiOptions((previousOptions) => {
+      const nextOptions = buildEmojiChoices({
+        selectedEmoji: profileDraft.emoji,
+        previousChoices: previousOptions,
+      });
+
+      if (!nextOptions.includes(profileDraft.emoji)) {
+        setProfileDraft((current) => ({
+          ...current,
+          emoji: nextOptions[0] ?? DEFAULT_PLAYER_EMOJI,
+        }));
+      }
+
+      return nextOptions;
+    });
+  }, [profileDraft.emoji]);
+
+  const handleSaveProfile = useCallback(async () => {
+    if (!snapshot || !me) {
+      return;
+    }
+
+    setProfileSaving(true);
+    setProfileError(null);
+
+    try {
+      const nextProfile = {
+        name: profileDraft.name.trim(),
+        color: profileDraft.color,
+        emoji: profileDraft.emoji,
+      };
+
+      await updatePlayerProfile(snapshot.room.id, me.id, nextProfile);
+      setStoredPlayerPreferences(nextProfile);
+      setProfileOpen(false);
+      await loadSnapshot();
+    } catch (issue) {
+      setProfileError(issue instanceof Error ? issue.message : "Profile update failed.");
+    } finally {
+      setProfileSaving(false);
+    }
+  }, [loadSnapshot, me, profileDraft, snapshot]);
+
   if (loading) {
     return (
       <main className="app-page">
-        <div className="app-page-card app-page-card-wide app-page-card-mobile-fill">
-          Loading...
+        <div className="app-page-card app-page-card-wide app-page-card-mobile-fill flex flex-col">
+          <AppBanner />
+          <div className="flex flex-1 items-center justify-center">
+            <div className="grid justify-items-center gap-3">
+              <div
+                aria-hidden="true"
+                className="h-12 w-12 animate-spin rounded-full border-4 border-slate-300 border-t-black"
+              />
+              <p className="text-sm font-semibold text-slate-600">Loading room...</p>
+            </div>
+          </div>
         </div>
       </main>
     );
@@ -285,28 +433,25 @@ export function RoomClient({ code }: RoomClientProps) {
 
   if (!playerId || !me) {
     return (
-      <main className="app-page pb-28">
-        <div className="app-page-card app-page-card-wide app-page-card-mobile-fill">
-          <JoinInline
-            code={snapshot.room.code}
-            defaultColor={joinDefaults.color}
-            defaultEmoji={joinDefaults.emoji}
-            defaultName={joinDefaults.name}
-            error={joinError}
-            loading={joinLoading}
-            onJoin={handleInlineJoin}
-            takenColors={snapshot.players.map((player) => player.color)}
-          />
-        </div>
+      <main className="app-page">
+        <EntryProfileForm
+          error={joinError}
+          initialCode={snapshot.room.code}
+          initialColor={joinDefaults.color}
+          initialEmoji={joinDefaults.emoji}
+          initialName={joinDefaults.name}
+          loading={joinLoading}
+          onSubmit={handleInlineJoin}
+          showCodeInput
+          submitLabel="Join"
+          title="Join Room"
+        />
       </main>
     );
   }
 
   const submittedPromptCount = snapshot.prompts.length;
-  const canStart =
-    snapshot.players.length >= 3 &&
-    snapshot.players.length <= 10 &&
-    submittedPromptCount === snapshot.players.length;
+  const canStart = snapshot.players.length >= 2;
 
   const currentPrompt = round?.currentPrompt ?? null;
   const confessions = round?.confessions ?? [];
@@ -353,54 +498,82 @@ export function RoomClient({ code }: RoomClientProps) {
 
   return (
     <main className="app-page pb-28">
-      <div className="app-page-card app-page-card-wide app-page-card-mobile-fill">
-        <div className="flex flex-col gap-3">
+      <div className="app-page-card app-page-card-wide app-page-card-mobile-fill flex flex-col">
+        {snapshot.room.phase === "lobby" ? <AppBanner /> : null}
+
+        <div className={`flex flex-1 flex-col gap-3 ${snapshot.room.phase === "lobby" ? "pt-4" : ""}`}>
           <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-sm font-black tracking-[0.2em]">
-              {phaseSymbol(snapshot.room.phase)} {snapshot.room.code}
-            </p>
-            {me.is_host ? (
-              <button
-                className="rounded-xl border border-slate-300 px-3 py-2 text-sm font-bold"
-                onClick={() => {
-                  setSettingsDraft({
-                    answeringSeconds: snapshot.room.answering_seconds,
-                    guessingSeconds: snapshot.room.guessing_seconds,
-                    revealSeconds: snapshot.room.reveal_seconds,
-                  });
-                  setSettingsOpen(true);
-                }}
-                type="button"
-              >
-                Timers
-              </button>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-black tracking-[0.08em]">
+                Room Code: {snapshot.room.code}
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  aria-label="Profile settings"
+                  className="rounded-xl border border-slate-300 px-3 py-2 text-2xl font-bold leading-none"
+                  onClick={openProfileSettings}
+                  type="button"
+                >
+                  ⚙
+                </button>
+                {me.is_host ? (
+                  <button
+                    aria-label="Host game settings"
+                    className="rounded-xl border border-slate-300 px-3 py-2 text-2xl font-bold leading-none"
+                    onClick={() => {
+                      setSettingsDraft({
+                        promptSeconds: snapshot.room.prompt_seconds,
+                        roundCount: snapshot.room.round_count,
+                        answeringSeconds: snapshot.room.answering_seconds,
+                        guessingSeconds: snapshot.room.guessing_seconds,
+                        revealSeconds: snapshot.room.reveal_seconds,
+                      });
+                      setSettingsOpen(true);
+                    }}
+                    type="button"
+                  >
+                    ⏱
+                  </button>
+                ) : null}
+              </div>
+            </div>
+            {snapshot.room.phase !== "lobby" ? (
+              <>
+                <p className="mt-2 text-lg font-bold" style={{ color: me.color }}>
+                  {me.name} {me.emoji}
+                </p>
+                <p className="text-sm text-slate-600">
+                  {snapshot.room.current_prompt_index + 1}/
+                  {Math.max(snapshot.prompts.length, 1)} | {snapshot.players.length} players
+                </p>
+              </>
             ) : null}
-          </div>
-          <p className="mt-2 text-lg font-bold" style={{ color: me.color }}>
-            {me.name} {me.emoji}
-          </p>
-          <p className="text-sm text-slate-600">
-            {snapshot.room.current_prompt_index + 1}/{Math.max(snapshot.prompts.length, 1)} |{" "}
-            {snapshot.players.length} players
-          </p>
-          {actionError ? (
-            <p className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-              {actionError}
-            </p>
-          ) : null}
+            {actionError ? (
+              <p className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                {actionError}
+              </p>
+            ) : null}
           </section>
 
           {snapshot.room.phase === "lobby" ? (
             <LobbyStage
               busy={Boolean(busyAction)}
               canStart={canStart}
-              onPromptTextChange={setPromptText}
+              isHost={me.is_host}
               onStart={() =>
                 runAction("start", async () => {
-                  await startGame(snapshot.room.id);
+                  await startGame(snapshot.room.id, me.id);
                 })
               }
+              players={snapshot.players}
+            />
+          ) : null}
+
+          {snapshot.room.phase === "prompting" ? (
+            <PromptingStage
+              busy={Boolean(busyAction)}
+              deadlineAt={snapshot.room.phase_deadline_at}
+              onPromptTextChange={setPromptText}
               onSubmitPrompt={() =>
                 runAction("prompt", async () => {
                   await submitPrompt(snapshot.room.id, me.id, promptText);
@@ -409,6 +582,7 @@ export function RoomClient({ code }: RoomClientProps) {
               playerCount={snapshot.players.length}
               promptReady={Boolean(myPrompt)}
               promptText={promptText}
+              roundCount={snapshot.room.round_count}
               submittedPromptCount={submittedPromptCount}
             />
           ) : null}
@@ -508,8 +682,24 @@ export function RoomClient({ code }: RoomClientProps) {
         </div>
       </div>
 
+      <ProfileSettingsSheet
+        colorOptions={profileColorOptions}
+        emojiOptions={profileEmojiOptions}
+        error={profileError}
+        onChange={setProfileDraft}
+        onClose={() => setProfileOpen(false)}
+        onRefreshColors={refreshProfileColors}
+        onRefreshEmojis={refreshProfileEmojis}
+        onSave={handleSaveProfile}
+        open={profileOpen}
+        saving={profileSaving}
+        takenColors={takenColorsForProfile}
+        values={profileDraft}
+      />
+
       {me.is_host ? (
         <SettingsSheet
+          allowRoundControls={snapshot.room.phase === "lobby"}
           onChange={setSettingsDraft}
           onClose={() => setSettingsOpen(false)}
           onSave={handleSaveSettings}

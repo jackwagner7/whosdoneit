@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { AppBanner } from "@/components/app-banner";
 import { PlayerColorPicker } from "@/components/player-color-picker";
 import { PlayerEmojiPicker } from "@/components/player-emoji-picker";
 import { PlayerBox } from "@/components/player-box";
@@ -14,12 +15,20 @@ import {
 type EntryProfileFormProps = {
   title: string;
   submitLabel: string;
+  showCodeInput?: boolean;
+  codeReadOnly?: boolean;
+  initialCode?: string;
   initialName: string;
   initialColor: string;
   initialEmoji: string;
   loading: boolean;
   error: string | null;
-  onSubmit: (values: { name: string; color: string; emoji: string }) => Promise<void>;
+  onSubmit: (values: {
+    code: string;
+    name: string;
+    color: string;
+    emoji: string;
+  }) => Promise<void>;
 };
 
 type PickerState = {
@@ -51,6 +60,9 @@ function buildInitialEmojiState(initialEmoji: string): PickerState {
 export function EntryProfileForm({
   title,
   submitLabel,
+  showCodeInput = false,
+  codeReadOnly = false,
+  initialCode = "",
   initialName,
   initialColor,
   initialEmoji,
@@ -58,6 +70,7 @@ export function EntryProfileForm({
   error,
   onSubmit,
 }: EntryProfileFormProps) {
+  const [code, setCode] = useState(initialCode.toUpperCase());
   const [name, setName] = useState(initialName);
   const [colorState, setColorState] = useState<PickerState>(() =>
     buildInitialColorState(initialColor),
@@ -104,14 +117,27 @@ export function EntryProfileForm({
 
   return (
     <div className="app-page-card app-page-card-mobile-fill flex flex-col">
-      <div className="flex-1 grid content-center gap-4 pb-40 sm:pb-0">
+      <AppBanner />
+
+      <div className="flex-1 grid content-center gap-4 pt-4">
         <div>
           <h1 className="text-3xl font-black tracking-tight sm:text-4xl text-center pb-[13px]">{title}</h1>
         </div>
+        {showCodeInput ? (
+          <div className="grid gap-0.5">
+            <input
+              autoCapitalize="characters"
+              autoComplete="off"
+              className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xl font-semibold uppercase sm:text-2xl"
+              maxLength={8}
+              onChange={(event) => setCode(event.target.value.toUpperCase())}
+              placeholder="Room Code"
+              readOnly={codeReadOnly}
+              value={code}
+            />
+          </div>
+        ) : null}
         <div className="grid gap-0.5">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-            Name
-          </p>
           <input
             autoComplete="nickname"
             className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xl font-semibold sm:text-2xl"
@@ -121,10 +147,7 @@ export function EntryProfileForm({
           />
         </div>
 
-        <div className="grid gap-2">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-            Colour
-          </p>
+        <div className="grid gap-5">
           <PlayerColorPicker
             onChange={(next) =>
               setColorState((previous) => ({ ...previous, value: next }))
@@ -136,10 +159,7 @@ export function EntryProfileForm({
           />
         </div>
 
-        <div className="grid gap-2">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-            Emoji
-          </p>
+        <div className="grid gap-5">
           <PlayerEmojiPicker
             onChange={(next) =>
               setEmojiState((previous) => ({ ...previous, value: next }))
@@ -158,7 +178,7 @@ export function EntryProfileForm({
         ) : null}
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-30 grid gap-3 border-t border-slate-200 bg-white/95 p-3 sm:static sm:mt-4 sm:border-0 sm:bg-transparent sm:p-0">
+      <div className="mt-auto grid gap-3">
         <PlayerBox
           className="player-box-floating"
           color={colorState.value}
@@ -166,10 +186,11 @@ export function EntryProfileForm({
           name={name}
         />
         <button
-          className="w-full rounded-2xl bg-slate-900 px-5 py-3 text-xl font-bold text-white disabled:opacity-50 sm:text-2xl"
-          disabled={loading || !name.trim()}
+          className="w-full rounded-2xl bg-black px-5 py-3 text-xl font-bold text-white disabled:opacity-50 sm:text-2xl"
+          disabled={loading || !name.trim() || (showCodeInput && !code.trim())}
           onClick={() =>
             void onSubmit({
+              code: code.trim().toUpperCase(),
               name,
               color: colorState.value,
               emoji: emojiState.value,

@@ -13,12 +13,12 @@ export default function JoinPage() {
   const router = useRouter();
 
   async function handleJoin(values: {
+    code: string;
     name: string;
     color: string;
     emoji: string;
   }) {
-    const rawCode = window.prompt("Room code") ?? "";
-    const code = rawCode.trim().toUpperCase();
+    const code = values.code.trim().toUpperCase();
     if (!code || !values.name.trim()) {
       return;
     }
@@ -42,11 +42,13 @@ export default function JoinPage() {
     <main className="app-page">
       <EntryProfileForm
         error={error}
+        initialCode=""
         initialColor={defaults.color}
         initialEmoji={defaults.emoji}
         initialName={defaults.name}
         loading={loading}
         onSubmit={handleJoin}
+        showCodeInput
         submitLabel="Join"
         title="Join Room"
       />

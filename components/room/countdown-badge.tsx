@@ -39,7 +39,7 @@ export function CountdownBadge({ deadlineAt, prefix }: CountdownBadgeProps) {
       className={`rounded-full px-3 py-1 text-sm font-bold ${
         isUrgent
           ? "timer-urgent bg-rose-500 text-white"
-          : "bg-slate-900 text-white"
+          : "bg-black text-white"
       }`}
     >
       {prefix} {remaining}s

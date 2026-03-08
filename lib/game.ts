@@ -13,12 +13,15 @@ import type {
 
 const ROOM_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ";
 const MAX_ROOM_CODE_ATTEMPTS = 12;
-const MIN_PLAYERS = 3;
-const MAX_PLAYERS = 10;
+const MIN_PLAYERS = 2;
 const MIN_TIMER_SECONDS = 5;
 const MAX_TIMER_SECONDS = 180;
+const MIN_ROUNDS = 1;
+const MAX_ROUNDS = 10;
 
 const DEFAULT_ROOM_SETTINGS: RoomSettings = {
+  promptSeconds: 20,
+  roundCount: 1,
   answeringSeconds: 25,
   guessingSeconds: 35,
   revealSeconds: 8,
@@ -284,15 +287,40 @@ function clampSeconds(value: number) {
   return Math.min(MAX_TIMER_SECONDS, Math.max(MIN_TIMER_SECONDS, Math.round(value)));
 }
 
-function sanitizeSettings(settings?: Partial<RoomSettings>) {
+function clampRounds(value: number) {
+  return Math.min(MAX_ROUNDS, Math.max(MIN_ROUNDS, Math.round(value)));
+}
+
+function sanitizeSettings(
+  settings?: Partial<RoomSettings>,
+  baseSettings?: Partial<RoomSettings>,
+) {
   return {
+    promptSeconds: clampSeconds(
+      settings?.promptSeconds ??
+        baseSettings?.promptSeconds ??
+        DEFAULT_ROOM_SETTINGS.promptSeconds,
+    ),
+    roundCount: clampRounds(
+      settings?.roundCount ??
+        baseSettings?.roundCount ??
+        DEFAULT_ROOM_SETTINGS.roundCount,
+    ),
     answeringSeconds: clampSeconds(
-      settings?.answeringSeconds ?? DEFAULT_ROOM_SETTINGS.answeringSeconds,
+      settings?.answeringSeconds ??
+        baseSettings?.answeringSeconds ??
+        DEFAULT_ROOM_SETTINGS.answeringSeconds,
     ),
     guessingSeconds: clampSeconds(
-      settings?.guessingSeconds ?? DEFAULT_ROOM_SETTINGS.guessingSeconds,
+      settings?.guessingSeconds ??
+        baseSettings?.guessingSeconds ??
+        DEFAULT_ROOM_SETTINGS.guessingSeconds,
     ),
-    revealSeconds: clampSeconds(settings?.revealSeconds ?? DEFAULT_ROOM_SETTINGS.revealSeconds),
+    revealSeconds: clampSeconds(
+      settings?.revealSeconds ??
+        baseSettings?.revealSeconds ??
+        DEFAULT_ROOM_SETTINGS.revealSeconds,
+    ),
   };
 }
 
@@ -484,6 +512,8 @@ export async function createRoom(hostName: string, options?: CreateRoomOptions) 
         reveal_player_index: 0,
         reveal_truth_visible: false,
         phase_deadline_at: null,
+        prompt_seconds: sanitizedSettings.promptSeconds,
+        round_count: sanitizedSettings.roundCount,
         answering_seconds: sanitizedSettings.answeringSeconds,
         guessing_seconds: sanitizedSettings.guessingSeconds,
         reveal_seconds: sanitizedSettings.revealSeconds,
@@ -565,9 +595,6 @@ export async function joinRoom(code: string, name: string, color?: string, emoji
   }
 
   const typedPlayers = (existingPlayers ?? []) as Player[];
-  if (typedPlayers.length >= MAX_PLAYERS) {
-    throw new Error("Room is full.");
-  }
 
   if (
     typedPlayers.some(
@@ -678,25 +705,49 @@ export async function updateRoomSettings(
   playerId: string,
   nextSettings: Partial<RoomSettings>,
 ) {
-  const { data: player, error: playerError } = await supabase
-    .from("players")
-    .select("*")
-    .eq("id", playerId)
-    .eq("room_id", roomId)
-    .maybeSingle();
+  const [playerResult, roomResult] = await Promise.all([
+    supabase
+      .from("players")
+      .select("*")
+      .eq("id", playerId)
+      .eq("room_id", roomId)
+      .maybeSingle(),
+    supabase.from("rooms").select("*").eq("id", roomId).maybeSingle(),
+  ]);
 
-  if (playerError) {
-    throw new Error(asMessage(playerError));
+  if (playerResult.error) {
+    throw new Error(asMessage(playerResult.error));
+  }
+  if (roomResult.error) {
+    throw new Error(asMessage(roomResult.error));
   }
 
-  if (!player || !(player as Player).is_host) {
+  if (!playerResult.data || !(playerResult.data as Player).is_host) {
     throw new Error("Only the room creator can edit settings.");
   }
+  if (!roomResult.data) {
+    throw new Error("Room not found.");
+  }
 
-  const settings = sanitizeSettings(nextSettings);
+  const room = roomResult.data as Room;
+  const settings = sanitizeSettings(nextSettings, {
+    promptSeconds: room.prompt_seconds,
+    roundCount: room.round_count,
+    answeringSeconds: room.answering_seconds,
+    guessingSeconds: room.guessing_seconds,
+    revealSeconds: room.reveal_seconds,
+  });
+
+  if (room.phase !== "lobby") {
+    settings.promptSeconds = room.prompt_seconds;
+    settings.roundCount = room.round_count;
+  }
+
   const { error } = await supabase
     .from("rooms")
     .update({
+      prompt_seconds: settings.promptSeconds,
+      round_count: settings.roundCount,
       answering_seconds: settings.answeringSeconds,
       guessing_seconds: settings.guessingSeconds,
       reveal_seconds: settings.revealSeconds,
@@ -732,6 +783,22 @@ export async function submitPrompt(roomId: string, playerId: string, text: strin
     throw new Error("Prompt text is required.");
   }
 
+  const { data: room, error: roomError } = await supabase
+    .from("rooms")
+    .select("*")
+    .eq("id", roomId)
+    .maybeSingle();
+
+  if (roomError) {
+    throw new Error(asMessage(roomError));
+  }
+  if (!room) {
+    throw new Error("Room not found.");
+  }
+  if ((room as Room).phase !== "prompting") {
+    throw new Error("Prompt stage is not active.");
+  }
+
   const { data, error } = await supabase
     .from("prompts")
     .upsert(
@@ -752,57 +819,53 @@ export async function submitPrompt(roomId: string, playerId: string, text: strin
   return data as Prompt;
 }
 
-export async function startGame(roomId: string) {
-  const [roomResult, playersResult, promptsResult] = await Promise.all([
+export async function startGame(roomId: string, playerId: string) {
+  const [roomResult, playersResult] = await Promise.all([
     supabase.from("rooms").select("*").eq("id", roomId).single(),
     supabase
       .from("players")
       .select("*")
       .eq("room_id", roomId)
       .order("created_at", { ascending: true }),
-    supabase.from("prompts").select("*").eq("room_id", roomId),
   ]);
 
   if (roomResult.error) throw new Error(asMessage(roomResult.error));
   if (playersResult.error) throw new Error(asMessage(playersResult.error));
-  if (promptsResult.error) throw new Error(asMessage(promptsResult.error));
 
   const room = roomResult.data as Room;
   const players = (playersResult.data ?? []) as Player[];
-  const prompts = (promptsResult.data ?? []) as Prompt[];
 
-  if (players.length < MIN_PLAYERS || players.length > MAX_PLAYERS) {
-    throw new Error(`Game requires ${MIN_PLAYERS}-${MAX_PLAYERS} players.`);
-  }
-  if (prompts.length !== players.length) {
-    throw new Error("Everyone needs to submit one question first.");
+  if (room.phase !== "lobby") {
+    throw new Error("Game can only be started from lobby.");
   }
 
-  if (!(await getHostPlayer(roomId))) {
+  if (players.length < MIN_PLAYERS) {
+    throw new Error(`Game requires at least ${MIN_PLAYERS} players.`);
+  }
+
+  const host = await getHostPlayer(roomId);
+  if (!host) {
     throw new Error("Room host is missing.");
   }
+  if (host.id !== playerId) {
+    throw new Error("Only the room creator can start the game.");
+  }
 
-  const orderedPrompts = randomizeOrder(prompts);
   const resetResults = await Promise.all([
-    ...orderedPrompts.map((prompt, index) =>
-      supabase
-        .from("prompts")
-        .update({ prompt_order: index, score_applied: false })
-        .eq("id", prompt.id),
-    ),
     ...players.map((player) =>
       supabase.from("players").update({ score: 0 }).eq("id", player.id),
     ),
+    supabase.from("prompts").delete().eq("room_id", roomId),
     supabase.from("confessions").delete().eq("room_id", roomId),
     supabase.from("guesses").delete().eq("room_id", roomId),
     supabase
       .from("rooms")
       .update({
-        phase: "answering",
+        phase: "prompting",
         current_prompt_index: 0,
         reveal_player_index: 0,
         reveal_truth_visible: false,
-        phase_deadline_at: addSecondsToNow(room.answering_seconds),
+        phase_deadline_at: addSecondsToNow(room.prompt_seconds),
       })
       .eq("id", roomId)
       .eq("phase", "lobby"),
@@ -863,8 +926,80 @@ export async function maybeAdvanceRoom(roomId: string) {
   const snapshot = await getGameSnapshotByRoomId(roomId);
   const { room } = snapshot;
   const players = getSortedPlayers(snapshot.players);
-  const currentPrompt = getCurrentPrompt(room, snapshot.prompts);
 
+  if (room.phase === "prompting") {
+    const allSubmitted = snapshot.prompts.length >= players.length;
+    const timeoutReached = hasDeadlinePassed(room.phase_deadline_at);
+    if (!allSubmitted && !timeoutReached) {
+      return;
+    }
+
+    let promptPool = snapshot.prompts;
+    if (promptPool.length === 0) {
+      const host = await getHostPlayer(roomId);
+      if (!host) {
+        throw new Error("Room host is missing.");
+      }
+
+      await submitPrompt(roomId, host.id, "Have you ever done it?");
+      const refreshed = await getGameSnapshotByRoomId(roomId);
+      promptPool = refreshed.prompts;
+    }
+
+    const targetPromptCount = Math.max(
+      1,
+      Math.min(clampRounds(room.round_count), promptPool.length),
+    );
+    const selectedPrompts = randomizeOrder(promptPool).slice(0, targetPromptCount);
+    const selectedIds = new Set(selectedPrompts.map((prompt) => prompt.id));
+
+    const promptResults: SupabaseResult[] = await Promise.all(
+      selectedPrompts.map((prompt, index) =>
+        supabase
+          .from("prompts")
+          .update({ prompt_order: index, score_applied: false })
+          .eq("id", prompt.id),
+      ),
+    );
+
+    const unselectedIds = promptPool
+      .filter((prompt) => !selectedIds.has(prompt.id))
+      .map((prompt) => prompt.id);
+
+    if (unselectedIds.length > 0) {
+      const deleteResult = await supabase
+        .from("prompts")
+        .delete()
+        .in("id", unselectedIds);
+      promptResults.push(deleteResult);
+    }
+
+    const [confessionResetResult, guessResetResult, roomUpdateResult] = await Promise.all([
+      supabase.from("confessions").delete().eq("room_id", roomId),
+      supabase.from("guesses").delete().eq("room_id", roomId),
+      supabase
+        .from("rooms")
+        .update({
+          phase: "answering",
+          current_prompt_index: 0,
+          reveal_player_index: 0,
+          reveal_truth_visible: false,
+          phase_deadline_at: addSecondsToNow(room.answering_seconds),
+        })
+        .eq("id", roomId)
+        .eq("phase", "prompting"),
+    ]);
+
+    throwOnResultError([
+      ...promptResults,
+      confessionResetResult,
+      guessResetResult,
+      roomUpdateResult,
+    ]);
+    return;
+  }
+
+  const currentPrompt = getCurrentPrompt(room, snapshot.prompts);
   if (!currentPrompt) {
     return;
   }

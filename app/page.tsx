@@ -8,7 +8,7 @@ export default function Home() {
         <div className="mt-2 flex w-full flex-col gap-3">
           <Link
             href="/host"
-            className="rounded-2xl bg-slate-900 px-5 py-3 text-center text-xl font-bold text-white sm:text-2xl"
+            className="rounded-2xl bg-black px-5 py-3 text-center text-xl font-bold text-white sm:text-2xl"
           >
             Create
           </Link>

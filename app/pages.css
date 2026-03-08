@@ -1,17 +1,18 @@
 .app-page {
   min-height: 100svh;
   background: #f1f5f9;
-  color: #0f172a;
+  color: #000000;
   padding: 0.75rem;
 }
 
 .app-page-card {
+  --card-padding: 1rem;
   margin: 0 auto;
   max-width: 28rem;
   border: 1px solid #e2e8f0;
   border-radius: 1.5rem;
   background: #ffffff;
-  padding: 1rem;
+  padding: var(--card-padding);
   box-shadow: 0 1px 2px 0 rgb(15 23 42 / 0.08);
 }
 
@@ -28,17 +29,31 @@
   max-width: 36rem;
 }
 
+.app-page-banner {
+  margin: calc(-1 * var(--card-padding)) calc(-1 * var(--card-padding)) 0;
+  border-radius: calc(1.5rem - 1px) calc(1.5rem - 1px) 0 0;
+  background: #000000;
+  color: #ffffff;
+  padding: 0.85rem 1rem;
+  text-align: center;
+  font-size: 1rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  line-height: 1.1;
+}
+
 .player-box {
   border: 1px solid #cbd5e1;
-  border-radius: 999px;
-  background: #f1f5f9;
-  padding: 0.65rem 1.1rem;
+  border-radius: 0.85rem;
+  background: #fcf9f9;
+  padding: 0.55rem 0.65rem;
   box-shadow: 0 8px 20px -14px rgb(15 23 42 / 0.45);
 }
 
 .player-box-floating {
-  margin: 0 auto;
-  width: min(19rem, 100%);
+  margin: 0 auto 0.4rem;
+  width: fit-content;
+  max-width: 100%;
 }
 
 .player-box-label {
@@ -53,13 +68,16 @@
 .player-box-value {
   margin-top: 0.15rem;
   text-align: center;
-  font-size: 1.2rem;
+  font-size: 1.35rem;
   font-weight: 800;
-  line-height: 1.25;
+  line-height: 1.1;
 }
 
 .player-box-emoji {
   margin-left: 0.35rem;
+  font-size: 1em;
+  line-height: inherit;
+  vertical-align: baseline;
 }
 
 @media (min-width: 640px) {
@@ -68,10 +86,14 @@
   }
 
   .app-page-card {
-    padding: 1.5rem;
+    --card-padding: 1.5rem;
   }
 
   .app-page-card-mobile-fill {
     min-height: 80vh;
+  }
+
+  .player-box-value {
+    font-size: 1.8rem;
   }
 }
