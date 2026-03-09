@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { AppBanner } from "@/components/app-banner";
 import { PlayerColorPicker } from "@/components/player-color-picker";
 import { PlayerEmojiPicker } from "@/components/player-emoji-picker";
 import {
@@ -9,6 +10,8 @@ import {
   buildEmojiChoices,
   DEFAULT_PLAYER_COLOR,
   DEFAULT_PLAYER_EMOJI,
+  refreshColorChoices,
+  refreshEmojiChoices,
 } from "@/lib/game";
 import {
   getStoredPlayerPreferences,
@@ -32,6 +35,22 @@ export default function SettingsPage() {
   );
   const [saved, setSaved] = useState(false);
 
+  function refreshColors() {
+    setColorOptions((previousChoices = []) => {
+      const nextOptions = refreshColorChoices({ previousChoices });
+      setColor(nextOptions[0] ?? DEFAULT_PLAYER_COLOR);
+      return nextOptions;
+    });
+  }
+
+  function refreshEmojis() {
+    setEmojiOptions((previousChoices = []) => {
+      const nextOptions = refreshEmojiChoices({ previousChoices });
+      setEmoji(nextOptions[0] ?? DEFAULT_PLAYER_EMOJI);
+      return nextOptions;
+    });
+  }
+
   function handleSave() {
     setStoredPlayerPreferences({ name, color, emoji });
     setSaved(true);
@@ -39,17 +58,14 @@ export default function SettingsPage() {
   }
 
   function handleShuffle() {
-    setColorOptions((previousChoices) =>
-      buildColorChoices({ selectedColor: color, previousChoices }),
-    );
-    setEmojiOptions((previousChoices) =>
-      buildEmojiChoices({ selectedEmoji: emoji, previousChoices }),
-    );
+    refreshColors();
+    refreshEmojis();
   }
 
   return (
     <main className="app-page">
       <div className="app-page-card">
+        <AppBanner />
         <h1 className="text-3xl font-black tracking-tight sm:text-4xl">Settings</h1>
         <p className="mt-1 text-sm text-slate-600">Default profile for new rooms.</p>
 
@@ -63,12 +79,22 @@ export default function SettingsPage() {
 
         <div className="mt-4 grid gap-2">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Color</p>
-          <PlayerColorPicker onChange={setColor} options={colorOptions} value={color} />
+          <PlayerColorPicker
+            onChange={setColor}
+            onRefresh={refreshColors}
+            options={colorOptions}
+            value={color}
+          />
         </div>
 
         <div className="mt-4 grid gap-2">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Emoji</p>
-          <PlayerEmojiPicker onChange={setEmoji} options={emojiOptions} value={emoji} />
+          <PlayerEmojiPicker
+            onChange={setEmoji}
+            onRefresh={refreshEmojis}
+            options={emojiOptions}
+            value={emoji}
+          />
         </div>
 
         <button
@@ -83,7 +109,7 @@ export default function SettingsPage() {
           {name || "Your name"} {emoji}
         </p>
 
-        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 p-3 sm:static sm:mt-4 sm:border-0 sm:bg-transparent sm:p-0">
+        <div className="mt-4 border-t border-slate-200 pt-3">
           <button
             className="w-full rounded-2xl bg-black px-5 py-3 text-xl font-bold text-white disabled:opacity-50 sm:text-2xl"
             disabled={!name.trim()}
@@ -96,7 +122,7 @@ export default function SettingsPage() {
 
         {saved ? <p className="mt-2 text-sm font-semibold text-emerald-700">Saved</p> : null}
 
-        <Link className="mt-4 inline-block pb-24 text-sm font-semibold underline sm:pb-0" href="/join">
+        <Link className="mt-4 inline-block text-sm font-semibold underline" href="/join">
           Back to join
         </Link>
       </div>

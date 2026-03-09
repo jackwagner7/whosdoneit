@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 type SettingsSheetProps = {
   open: boolean;
   values: {
@@ -10,7 +12,9 @@ type SettingsSheetProps = {
     revealSeconds: number;
   };
   saving: boolean;
+  addingFakePlayers: boolean;
   allowRoundControls: boolean;
+  allowFakePlayers: boolean;
   onChange: (values: {
     promptSeconds: number;
     roundCount: number;
@@ -18,6 +22,7 @@ type SettingsSheetProps = {
     guessingSeconds: number;
     revealSeconds: number;
   }) => void;
+  onAddFakePlayers: (count: number) => Promise<void>;
   onClose: () => void;
   onSave: (settings: {
     promptSeconds: number;
@@ -36,21 +41,30 @@ function clampRounds(value: number) {
   return Math.max(1, Math.min(10, Math.round(value)));
 }
 
+function clampFakePlayers(value: number) {
+  return Math.max(1, Math.min(20, Math.round(value)));
+}
+
 export function SettingsSheet({
   open,
   values,
   saving,
+  addingFakePlayers,
   allowRoundControls,
+  allowFakePlayers,
   onChange,
+  onAddFakePlayers,
   onClose,
   onSave,
 }: SettingsSheetProps) {
+  const [fakePlayerCount, setFakePlayerCount] = useState(2);
+
   if (!open) {
     return null;
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end bg-black/40 p-3">
+    <div className="absolute inset-0 z-50 flex items-end bg-black/40 p-3">
       <div className="card-enter w-full rounded-3xl bg-white p-4 shadow-xl">
         <h3 className="text-2xl font-black">Host Settings</h3>
         <p className="mt-1 text-sm text-slate-600">Host controls for this room.</p>
@@ -142,6 +156,43 @@ export function SettingsSheet({
         {!allowRoundControls ? (
           <p className="mt-2 text-xs text-slate-500">Rounds can only be edited in lobby.</p>
         ) : null}
+
+        <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+          <p className="text-sm font-semibold">Testing</p>
+          <p className="mt-1 text-xs text-slate-600">
+            Temporary helper: add fake users that auto-submit prompts and responses.
+          </p>
+          <div className="mt-3 grid grid-cols-[1fr_auto] items-end gap-2">
+            <label className="grid gap-1">
+              <span className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
+                Fake users
+              </span>
+              <input
+                className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-lg font-semibold"
+                disabled={addingFakePlayers || !allowFakePlayers}
+                max={20}
+                min={1}
+                onChange={(event) =>
+                  setFakePlayerCount(clampFakePlayers(Number(event.target.value)))
+                }
+                type="number"
+                value={fakePlayerCount}
+              />
+            </label>
+            <button
+              className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-bold uppercase tracking-[0.08em] disabled:opacity-60"
+              disabled={addingFakePlayers || !allowFakePlayers}
+              onClick={() => void onAddFakePlayers(fakePlayerCount)}
+              type="button"
+            >
+              {addingFakePlayers ? "..." : "Add fake users"}
+            </button>
+          </div>
+          {!allowFakePlayers ? (
+            <p className="mt-2 text-xs text-slate-500">Fake users can only be added in lobby.</p>
+          ) : null}
+        </div>
+
         <div className="mt-4 grid grid-cols-2 gap-2">
           <button
             className="rounded-xl border border-slate-300 px-3 py-3 text-lg font-semibold"

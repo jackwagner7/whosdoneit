@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 
 type CountdownBadgeProps = {
   deadlineAt: string | null;
-  prefix: string;
 };
 
 function getRemainingSeconds(deadlineAt: string | null, now: number) {
@@ -16,7 +15,7 @@ function getRemainingSeconds(deadlineAt: string | null, now: number) {
   return Math.max(0, remaining);
 }
 
-export function CountdownBadge({ deadlineAt, prefix }: CountdownBadgeProps) {
+export function CountdownBadge({ deadlineAt }: CountdownBadgeProps) {
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -36,13 +35,13 @@ export function CountdownBadge({ deadlineAt, prefix }: CountdownBadgeProps) {
   const isUrgent = remaining <= 5;
   return (
     <div
-      className={`rounded-full px-3 py-1 text-sm font-bold ${
+      className={`inline-flex w-[4.5rem] justify-center rounded-full px-3 py-1 text-sm font-bold tabular-nums ${
         isUrgent
           ? "timer-urgent bg-rose-500 text-white"
           : "bg-black text-white"
       }`}
     >
-      {prefix} {remaining}s
+      {remaining}
     </div>
   );
 }

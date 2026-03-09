@@ -18,6 +18,7 @@ const MIN_TIMER_SECONDS = 5;
 const MAX_TIMER_SECONDS = 180;
 const MIN_ROUNDS = 1;
 const MAX_ROUNDS = 10;
+const ROUND_PROMPT_FACTOR = 1000;
 
 const DEFAULT_ROOM_SETTINGS: RoomSettings = {
   promptSeconds: 20,
@@ -141,6 +142,16 @@ const PLAYER_COLOR_SET: Set<string> = new Set<string>(
   PLAYER_COLOR_POOL.map((color) => color.toLowerCase()),
 );
 const PLAYER_EMOJI_SET: Set<string> = new Set<string>(PLAYER_EMOJI_POOL);
+const TEST_BOT_NAME_PREFIX = "Test Bot";
+const MAX_TEST_BOT_ADD_COUNT = 20;
+const TEST_PROMPT_POOL = [
+  "eaten breakfast for dinner",
+  "sent a text to the wrong person",
+  "watched a full season in one day",
+  "laughed at the wrong moment",
+  "forgotten why you entered a room",
+  "tried a strange food and liked it",
+] as const;
 
 type SupabaseResult = { error: unknown };
 
@@ -172,6 +183,20 @@ function normalizeEmoji(emoji?: string) {
 
 function normalizePrompt(prompt: string) {
   return prompt.trim();
+}
+
+function isTestBotPlayer(player: Player) {
+  return player.name.startsWith(`${TEST_BOT_NAME_PREFIX} `);
+}
+
+function parseTestBotNumber(name: string) {
+  const match = name.match(/^Test Bot (\d+)$/);
+  return match ? Number(match[1]) : null;
+}
+
+function buildTestPrompt(seed: number) {
+  const poolIndex = Math.abs(seed) % TEST_PROMPT_POOL.length;
+  return `Test prompt: Have you ever ${TEST_PROMPT_POOL[poolIndex]}?`;
 }
 
 function asMessage(error: unknown) {
@@ -211,6 +236,35 @@ function uniqueStrings(values: string[]) {
   return [...new Set(values)];
 }
 
+function choicesMatch(left: string[], right: string[]) {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  return left.every((entry, index) => entry === right[index]);
+}
+
+function rerollChoices(
+  previousChoices: string[] | undefined,
+  createChoices: () => string[],
+  shouldRetry?: (nextChoices: string[], previousChoices: string[]) => boolean,
+  maxAttempts = 8,
+) {
+  const previous = previousChoices ?? [];
+  let next = createChoices();
+
+  for (
+    let attempt = 0;
+    attempt < maxAttempts &&
+    (choicesMatch(next, previous) || (shouldRetry ? shouldRetry(next, previous) : false));
+    attempt += 1
+  ) {
+    next = createChoices();
+  }
+
+  return next;
+}
+
 export function buildColorChoices(params: {
   selectedColor?: string;
   takenColors?: string[];
@@ -248,6 +302,41 @@ export function buildColorChoices(params: {
   return output.length > 0 ? output : [DEFAULT_PLAYER_COLOR];
 }
 
+export function refreshColorChoices(params: {
+  takenColors?: string[];
+  previousChoices?: string[];
+  count?: number;
+  maxAttempts?: number;
+}) {
+  const count = params.count ?? 3;
+  const takenColors = new Set(
+    (params.takenColors ?? []).map((color) => color.toLowerCase()),
+  );
+  const availablePool = PLAYER_COLOR_POOL.filter(
+    (color) => !takenColors.has(color),
+  ) as string[];
+  const previousSet = new Set(
+    (params.previousChoices ?? []).filter((color) => availablePool.includes(color)),
+  );
+  const nonPreviousCount = availablePool.filter(
+    (color) => !previousSet.has(color),
+  ).length;
+  const canAvoidOverlap = nonPreviousCount >= Math.min(count, availablePool.length);
+
+  return rerollChoices(
+    params.previousChoices,
+    () =>
+      buildColorChoices({
+        takenColors: params.takenColors,
+        count: params.count,
+      }),
+    canAvoidOverlap
+      ? (nextChoices) => nextChoices.some((choice) => previousSet.has(choice))
+      : undefined,
+    params.maxAttempts,
+  );
+}
+
 export function buildEmojiChoices(params: {
   selectedEmoji?: string;
   previousChoices?: string[];
@@ -273,6 +362,33 @@ export function buildEmojiChoices(params: {
 
   const output = uniqueStrings([...choices, ...filler]).slice(0, count);
   return output.length > 0 ? output : [DEFAULT_PLAYER_EMOJI];
+}
+
+export function refreshEmojiChoices(params: {
+  previousChoices?: string[];
+  count?: number;
+  maxAttempts?: number;
+}) {
+  const count = params.count ?? 3;
+  const previousSet = new Set(
+    (params.previousChoices ?? []).filter((emoji) => PLAYER_EMOJI_SET.has(emoji)),
+  );
+  const nonPreviousCount = PLAYER_EMOJI_POOL.filter(
+    (emoji) => !previousSet.has(emoji),
+  ).length;
+  const canAvoidOverlap = nonPreviousCount >= Math.min(count, PLAYER_EMOJI_POOL.length);
+
+  return rerollChoices(
+    params.previousChoices,
+    () =>
+      buildEmojiChoices({
+        count: params.count,
+      }),
+    canAvoidOverlap
+      ? (nextChoices) => nextChoices.some((choice) => previousSet.has(choice))
+      : undefined,
+    params.maxAttempts,
+  );
 }
 
 function getSortedPlayers(players: Player[]) {
@@ -339,12 +455,31 @@ function getExpectedGuessCount(playerCount: number) {
   return playerCount * Math.max(playerCount - 1, 0);
 }
 
+function decodeRoundPromptIndex(value: number) {
+  const normalized = Math.max(0, Math.floor(value));
+  return {
+    roundIndex: Math.floor(normalized / ROUND_PROMPT_FACTOR),
+    promptIndex: normalized % ROUND_PROMPT_FACTOR,
+  };
+}
+
+function encodeRoundPromptIndex(roundIndex: number, promptIndex: number) {
+  const safeRoundIndex = Math.max(0, Math.floor(roundIndex));
+  const safePromptIndex = Math.max(0, Math.floor(promptIndex));
+  return safeRoundIndex * ROUND_PROMPT_FACTOR + safePromptIndex;
+}
+
+export function getRoundCursor(room: Room) {
+  return decodeRoundPromptIndex(room.current_prompt_index);
+}
+
 export function getDefaultRoomSettings() {
   return { ...DEFAULT_ROOM_SETTINGS };
 }
 
 export function getCurrentPrompt(room: Room, prompts: Prompt[]) {
-  return getSortedPrompts(prompts)[room.current_prompt_index] ?? null;
+  const { promptIndex } = decodeRoundPromptIndex(room.current_prompt_index);
+  return getSortedPrompts(prompts)[promptIndex] ?? null;
 }
 
 type CreateRoomOptions = {
@@ -424,6 +559,124 @@ async function ensureAllConfessions(
   throwOnResultError(fillResults);
 }
 
+async function submitTestBotPrompts(roomId: string, players: Player[], prompts: Prompt[]) {
+  const testBots = players.filter(isTestBotPlayer);
+  if (testBots.length === 0) {
+    return;
+  }
+
+  const submittedBy = new Set(prompts.map((prompt) => prompt.submitted_by_player_id));
+  const missingBots = testBots.filter((bot) => !submittedBy.has(bot.id));
+  if (missingBots.length === 0) {
+    return;
+  }
+
+  const results = await Promise.all(
+    missingBots.map((bot, index) =>
+      supabase.from("prompts").upsert(
+        {
+          room_id: roomId,
+          submitted_by_player_id: bot.id,
+          text: buildTestPrompt(index + bot.name.length),
+        },
+        { onConflict: "room_id,submitted_by_player_id" },
+      ),
+    ),
+  );
+
+  throwOnResultError(results);
+}
+
+async function submitTestBotConfessions(
+  roomId: string,
+  promptId: string,
+  players: Player[],
+  confessions: Confession[],
+) {
+  const testBots = players.filter(isTestBotPlayer);
+  if (testBots.length === 0) {
+    return;
+  }
+
+  const submittedBy = new Set(confessions.map((entry) => entry.player_id));
+  const missingBots = testBots.filter((bot) => !submittedBy.has(bot.id));
+  if (missingBots.length === 0) {
+    return;
+  }
+
+  const results = await Promise.all(
+    missingBots.map((bot) =>
+      supabase.from("confessions").upsert(
+        {
+          room_id: roomId,
+          prompt_id: promptId,
+          player_id: bot.id,
+          answer: Math.random() >= 0.5,
+        },
+        { onConflict: "prompt_id,player_id" },
+      ),
+    ),
+  );
+
+  throwOnResultError(results);
+}
+
+async function submitTestBotGuesses(
+  roomId: string,
+  promptId: string,
+  players: Player[],
+  guesses: Guess[],
+) {
+  const testBots = players.filter(isTestBotPlayer);
+  if (testBots.length === 0) {
+    return;
+  }
+
+  const guessedPairs = new Set(
+    guesses.map((guess) => `${guess.guessing_player_id}:${guess.target_player_id}`),
+  );
+  const missingGuessEntries: Array<{
+    room_id: string;
+    prompt_id: string;
+    guessing_player_id: string;
+    target_player_id: string;
+    guessed_answer: boolean;
+  }> = [];
+
+  testBots.forEach((bot) => {
+    players.forEach((target) => {
+      if (target.id === bot.id) {
+        return;
+      }
+      const key = `${bot.id}:${target.id}`;
+      if (guessedPairs.has(key)) {
+        return;
+      }
+      missingGuessEntries.push({
+        room_id: roomId,
+        prompt_id: promptId,
+        guessing_player_id: bot.id,
+        target_player_id: target.id,
+        guessed_answer: Math.random() >= 0.5,
+      });
+    });
+  });
+
+  if (missingGuessEntries.length === 0) {
+    return;
+  }
+
+  const results = await Promise.all(
+    missingGuessEntries.map((entry) =>
+      supabase.from("guesses").upsert(entry, {
+        onConflict: "prompt_id,guessing_player_id,target_player_id",
+      }),
+    ),
+  );
+
+  throwOnResultError(results);
+}
+
 async function applyPromptScoresOnce(
   promptId: string,
   players: Player[],
@@ -488,6 +741,109 @@ async function getHostPlayer(roomId: string) {
   }
 
   return (host as Player | null) ?? null;
+}
+
+export async function addFakePlayers(roomId: string, playerId: string, count: number) {
+  const safeCount = Math.max(
+    1,
+    Math.min(MAX_TEST_BOT_ADD_COUNT, Math.round(Number(count) || 0)),
+  );
+  if (!safeCount) {
+    throw new Error("Choose at least one fake player.");
+  }
+
+  const [playerResult, roomResult, roomPlayersResult] = await Promise.all([
+    supabase
+      .from("players")
+      .select("*")
+      .eq("id", playerId)
+      .eq("room_id", roomId)
+      .maybeSingle(),
+    supabase.from("rooms").select("*").eq("id", roomId).maybeSingle(),
+    supabase.from("players").select("*").eq("room_id", roomId),
+  ]);
+
+  if (playerResult.error) {
+    throw new Error(asMessage(playerResult.error));
+  }
+  if (!playerResult.data || !(playerResult.data as Player).is_host) {
+    throw new Error("Only the room creator can add fake players.");
+  }
+  if (roomResult.error) {
+    throw new Error(asMessage(roomResult.error));
+  }
+  if (!roomResult.data) {
+    throw new Error("Room not found.");
+  }
+
+  const room = roomResult.data as Room;
+  if (room.phase !== "lobby") {
+    throw new Error("Fake players can only be added in lobby.");
+  }
+
+  if (roomPlayersResult.error) {
+    throw new Error(asMessage(roomPlayersResult.error));
+  }
+  const existingPlayers = (roomPlayersResult.data ?? []) as Player[];
+  const takenColors = new Set(existingPlayers.map((player) => player.color.toLowerCase()));
+  const availableColors = randomizeOrder(
+    PLAYER_COLOR_POOL.filter((color) => !takenColors.has(color)) as string[],
+  );
+  const createCount = Math.min(safeCount, availableColors.length);
+
+  if (createCount <= 0) {
+    throw new Error("No colors available for additional fake players.");
+  }
+
+  const takenNames = new Set(existingPlayers.map((player) => player.name.toLowerCase()));
+  const usedBotNumbers = new Set<number>();
+  existingPlayers.forEach((player) => {
+    const botNumber = parseTestBotNumber(player.name);
+    if (botNumber) {
+      usedBotNumbers.add(botNumber);
+    }
+  });
+
+  let nextBotNumber = 1;
+  const inserts: Array<{
+    room_id: string;
+    name: string;
+    color: string;
+    emoji: string;
+    is_host: boolean;
+    score: number;
+  }> = [];
+
+  for (let index = 0; index < createCount; index += 1) {
+    while (
+      usedBotNumbers.has(nextBotNumber) ||
+      takenNames.has(`${TEST_BOT_NAME_PREFIX.toLowerCase()} ${nextBotNumber}`)
+    ) {
+      nextBotNumber += 1;
+    }
+
+    const botName = `${TEST_BOT_NAME_PREFIX} ${nextBotNumber}`;
+    usedBotNumbers.add(nextBotNumber);
+    takenNames.add(botName.toLowerCase());
+
+    inserts.push({
+      room_id: roomId,
+      name: botName,
+      color: availableColors[index] ?? DEFAULT_PLAYER_COLOR,
+      emoji: PLAYER_EMOJI_POOL[Math.floor(Math.random() * PLAYER_EMOJI_POOL.length)] ?? DEFAULT_PLAYER_EMOJI,
+      is_host: false,
+      score: 0,
+    });
+
+    nextBotNumber += 1;
+  }
+
+  const { error } = await supabase.from("players").insert(inserts);
+  if (error) {
+    throw new Error(asMessage(error));
+  }
+
+  return { createdCount: inserts.length };
 }
 
 export async function createRoom(hostName: string, options?: CreateRoomOptions) {
@@ -926,15 +1282,30 @@ export async function maybeAdvanceRoom(roomId: string) {
   const snapshot = await getGameSnapshotByRoomId(roomId);
   const { room } = snapshot;
   const players = getSortedPlayers(snapshot.players);
+  const hasTestBots = players.some(isTestBotPlayer);
 
   if (room.phase === "prompting") {
-    const allSubmitted = snapshot.prompts.length >= players.length;
-    const timeoutReached = hasDeadlinePassed(room.phase_deadline_at);
+    let phaseSnapshot = snapshot;
+    let phaseRoom = room;
+    let phasePlayers = players;
+
+    if (hasTestBots) {
+      await submitTestBotPrompts(roomId, players, snapshot.prompts);
+      phaseSnapshot = await getGameSnapshotByRoomId(roomId);
+      phaseRoom = phaseSnapshot.room;
+      phasePlayers = getSortedPlayers(phaseSnapshot.players);
+      if (phaseRoom.phase !== "prompting") {
+        return;
+      }
+    }
+
+    const allSubmitted = phaseSnapshot.prompts.length >= phasePlayers.length;
+    const timeoutReached = hasDeadlinePassed(phaseRoom.phase_deadline_at);
     if (!allSubmitted && !timeoutReached) {
       return;
     }
 
-    let promptPool = snapshot.prompts;
+    let promptPool = phaseSnapshot.prompts;
     if (promptPool.length === 0) {
       const host = await getHostPlayer(roomId);
       if (!host) {
@@ -944,14 +1315,11 @@ export async function maybeAdvanceRoom(roomId: string) {
       await submitPrompt(roomId, host.id, "Have you ever done it?");
       const refreshed = await getGameSnapshotByRoomId(roomId);
       promptPool = refreshed.prompts;
+      phaseRoom = refreshed.room;
     }
 
-    const targetPromptCount = Math.max(
-      1,
-      Math.min(clampRounds(room.round_count), promptPool.length),
-    );
-    const selectedPrompts = randomizeOrder(promptPool).slice(0, targetPromptCount);
-    const selectedIds = new Set(selectedPrompts.map((prompt) => prompt.id));
+    const selectedPrompts = randomizeOrder(promptPool);
+    const { roundIndex } = decodeRoundPromptIndex(phaseRoom.current_prompt_index);
 
     const promptResults: SupabaseResult[] = await Promise.all(
       selectedPrompts.map((prompt, index) =>
@@ -962,18 +1330,6 @@ export async function maybeAdvanceRoom(roomId: string) {
       ),
     );
 
-    const unselectedIds = promptPool
-      .filter((prompt) => !selectedIds.has(prompt.id))
-      .map((prompt) => prompt.id);
-
-    if (unselectedIds.length > 0) {
-      const deleteResult = await supabase
-        .from("prompts")
-        .delete()
-        .in("id", unselectedIds);
-      promptResults.push(deleteResult);
-    }
-
     const [confessionResetResult, guessResetResult, roomUpdateResult] = await Promise.all([
       supabase.from("confessions").delete().eq("room_id", roomId),
       supabase.from("guesses").delete().eq("room_id", roomId),
@@ -981,10 +1337,10 @@ export async function maybeAdvanceRoom(roomId: string) {
         .from("rooms")
         .update({
           phase: "answering",
-          current_prompt_index: 0,
+          current_prompt_index: encodeRoundPromptIndex(roundIndex, 0),
           reveal_player_index: 0,
           reveal_truth_visible: false,
-          phase_deadline_at: addSecondsToNow(room.answering_seconds),
+          phase_deadline_at: addSecondsToNow(phaseRoom.answering_seconds),
         })
         .eq("id", roomId)
         .eq("phase", "prompting"),
@@ -1010,22 +1366,45 @@ export async function maybeAdvanceRoom(roomId: string) {
   const roundGuesses = snapshot.guesses.filter((guess) => guess.prompt_id === currentPrompt.id);
 
   if (room.phase === "answering") {
-    const allConfessed = roundConfessions.length >= players.length;
-    const timeoutReached = hasDeadlinePassed(room.phase_deadline_at);
+    let phaseSnapshot = snapshot;
+    let phaseRoom = room;
+    let phasePlayers = players;
+    let phasePrompt = currentPrompt;
+    let phaseConfessions = roundConfessions;
+
+    if (hasTestBots) {
+      await submitTestBotConfessions(roomId, currentPrompt.id, players, roundConfessions);
+      phaseSnapshot = await getGameSnapshotByRoomId(roomId);
+      phaseRoom = phaseSnapshot.room;
+      if (phaseRoom.phase !== "answering") {
+        return;
+      }
+      phasePlayers = getSortedPlayers(phaseSnapshot.players);
+      phasePrompt = getCurrentPrompt(phaseRoom, phaseSnapshot.prompts);
+      if (!phasePrompt) {
+        return;
+      }
+      phaseConfessions = phaseSnapshot.confessions.filter(
+        (confession) => confession.prompt_id === phasePrompt.id,
+      );
+    }
+
+    const allConfessed = phaseConfessions.length >= phasePlayers.length;
+    const timeoutReached = hasDeadlinePassed(phaseRoom.phase_deadline_at);
     if (!allConfessed && !timeoutReached) {
       return;
     }
 
-    await ensureAllConfessions(roomId, currentPrompt.id, players, roundConfessions);
+    await ensureAllConfessions(roomId, phasePrompt.id, phasePlayers, phaseConfessions);
     const { error } = await supabase
       .from("rooms")
       .update({
         phase: "guessing",
-        phase_deadline_at: addSecondsToNow(room.guessing_seconds),
+        phase_deadline_at: addSecondsToNow(phaseRoom.guessing_seconds),
       })
       .eq("id", roomId)
       .eq("phase", "answering")
-      .eq("current_prompt_index", room.current_prompt_index);
+      .eq("current_prompt_index", phaseRoom.current_prompt_index);
 
     if (error) {
       throw new Error(asMessage(error));
@@ -1034,30 +1413,45 @@ export async function maybeAdvanceRoom(roomId: string) {
   }
 
   if (room.phase === "guessing") {
-    const expectedGuesses = getExpectedGuessCount(players.length);
-    const allGuessed = roundGuesses.length >= expectedGuesses;
-    const timeoutReached = hasDeadlinePassed(room.phase_deadline_at);
+    let phaseSnapshot = snapshot;
+    let phaseRoom = room;
+    let phasePlayers = players;
+    let phasePrompt = currentPrompt;
+    let phaseGuesses = roundGuesses;
+    let phaseConfessions = roundConfessions;
+
+    if (hasTestBots) {
+      await submitTestBotGuesses(roomId, currentPrompt.id, players, roundGuesses);
+      phaseSnapshot = await getGameSnapshotByRoomId(roomId);
+      phaseRoom = phaseSnapshot.room;
+      if (phaseRoom.phase !== "guessing") {
+        return;
+      }
+      phasePlayers = getSortedPlayers(phaseSnapshot.players);
+      phasePrompt = getCurrentPrompt(phaseRoom, phaseSnapshot.prompts);
+      if (!phasePrompt) {
+        return;
+      }
+      phaseConfessions = phaseSnapshot.confessions.filter(
+        (entry) => entry.prompt_id === phasePrompt.id,
+      );
+      phaseGuesses = phaseSnapshot.guesses.filter(
+        (entry) => entry.prompt_id === phasePrompt.id,
+      );
+    }
+
+    const expectedGuesses = getExpectedGuessCount(phasePlayers.length);
+    const allGuessed = phaseGuesses.length >= expectedGuesses;
+    const timeoutReached = hasDeadlinePassed(phaseRoom.phase_deadline_at);
     if (!allGuessed && !timeoutReached) {
       return;
     }
 
-    const freshSnapshot = await getGameSnapshotByRoomId(roomId);
-    const freshPrompt = getCurrentPrompt(freshSnapshot.room, freshSnapshot.prompts);
-    if (!freshPrompt) {
-      return;
-    }
-    const freshConfessions = freshSnapshot.confessions.filter(
-      (entry) => entry.prompt_id === freshPrompt.id,
-    );
-    const freshGuesses = freshSnapshot.guesses.filter(
-      (entry) => entry.prompt_id === freshPrompt.id,
-    );
-
     await applyPromptScoresOnce(
-      freshPrompt.id,
-      freshSnapshot.players,
-      freshConfessions,
-      freshGuesses,
+      phasePrompt.id,
+      phaseSnapshot.players,
+      phaseConfessions,
+      phaseGuesses,
     );
 
     const { error } = await supabase
@@ -1066,11 +1460,11 @@ export async function maybeAdvanceRoom(roomId: string) {
         phase: "revealing",
         reveal_player_index: 0,
         reveal_truth_visible: false,
-        phase_deadline_at: addSecondsToNow(freshSnapshot.room.reveal_seconds),
+        phase_deadline_at: addSecondsToNow(phaseRoom.reveal_seconds),
       })
       .eq("id", roomId)
       .eq("phase", "guessing")
-      .eq("current_prompt_index", freshSnapshot.room.current_prompt_index);
+      .eq("current_prompt_index", phaseRoom.current_prompt_index);
 
     if (error) {
       throw new Error(asMessage(error));
@@ -1081,6 +1475,10 @@ export async function maybeAdvanceRoom(roomId: string) {
   if (room.phase === "revealing") {
     const currentRevealPlayer = players[room.reveal_player_index];
     if (!currentRevealPlayer) {
+      if (room.phase_deadline_at && !hasDeadlinePassed(room.phase_deadline_at)) {
+        return;
+      }
+
       const { error } = await supabase
         .from("rooms")
         .update({
@@ -1124,12 +1522,13 @@ export async function maybeAdvanceRoom(roomId: string) {
       const { error } = await supabase
         .from("rooms")
         .update({
-          phase: "leaderboard",
-          phase_deadline_at: null,
-          reveal_truth_visible: false,
+          reveal_player_index: players.length,
+          reveal_truth_visible: true,
+          phase_deadline_at: addSecondsToNow(room.reveal_seconds),
         })
         .eq("id", roomId)
-        .eq("phase", "revealing");
+        .eq("phase", "revealing")
+        .eq("reveal_player_index", room.reveal_player_index);
 
       if (error) {
         throw new Error(asMessage(error));
@@ -1209,12 +1608,13 @@ export async function advanceReveal(roomId: string, playerId: string) {
     const { error } = await supabase
       .from("rooms")
       .update({
-        phase: "leaderboard",
-        phase_deadline_at: null,
-        reveal_truth_visible: false,
+        reveal_player_index: players.length,
+        reveal_truth_visible: true,
+        phase_deadline_at: addSecondsToNow(room.reveal_seconds),
       })
       .eq("id", roomId)
-      .eq("phase", "revealing");
+      .eq("phase", "revealing")
+      .eq("reveal_player_index", room.reveal_player_index);
 
     if (error) {
       throw new Error(asMessage(error));
@@ -1249,9 +1649,11 @@ export async function startNextRound(roomId: string) {
 
   const room = roomResult.data as Room;
   const prompts = (promptsResult.data ?? []) as Prompt[];
-  const hasNextRound = room.current_prompt_index + 1 < prompts.length;
+  const { roundIndex, promptIndex } = decodeRoundPromptIndex(room.current_prompt_index);
+  const hasNextPromptInRound = promptIndex + 1 < prompts.length;
+  const hasAnotherRound = roundIndex + 1 < room.round_count;
 
-  if (!hasNextRound) {
+  if (!hasNextPromptInRound && !hasAnotherRound) {
     const { error } = await supabase
       .from("rooms")
       .update({
@@ -1267,11 +1669,39 @@ export async function startNextRound(roomId: string) {
     return;
   }
 
+  if (!hasNextPromptInRound && hasAnotherRound) {
+    const [promptResetResult, confessionResetResult, guessResetResult, roomUpdateResult] =
+      await Promise.all([
+        supabase.from("prompts").delete().eq("room_id", roomId),
+        supabase.from("confessions").delete().eq("room_id", roomId),
+        supabase.from("guesses").delete().eq("room_id", roomId),
+        supabase
+          .from("rooms")
+          .update({
+            phase: "prompting",
+            current_prompt_index: encodeRoundPromptIndex(roundIndex + 1, 0),
+            reveal_player_index: 0,
+            reveal_truth_visible: false,
+            phase_deadline_at: addSecondsToNow(room.prompt_seconds),
+          })
+          .eq("id", roomId)
+          .eq("phase", "leaderboard"),
+      ]);
+
+    throwOnResultError([
+      promptResetResult,
+      confessionResetResult,
+      guessResetResult,
+      roomUpdateResult,
+    ]);
+    return;
+  }
+
   const { error } = await supabase
     .from("rooms")
     .update({
       phase: "answering",
-      current_prompt_index: room.current_prompt_index + 1,
+      current_prompt_index: encodeRoundPromptIndex(roundIndex, promptIndex + 1),
       reveal_player_index: 0,
       reveal_truth_visible: false,
       phase_deadline_at: addSecondsToNow(room.answering_seconds),
@@ -1282,6 +1712,57 @@ export async function startNextRound(roomId: string) {
   if (error) {
     throw new Error(asMessage(error));
   }
+}
+
+export async function playAgainToLobby(roomId: string, playerId: string) {
+  const [roomResult, playerResult, playersResult] = await Promise.all([
+    supabase.from("rooms").select("*").eq("id", roomId).maybeSingle(),
+    supabase
+      .from("players")
+      .select("*")
+      .eq("id", playerId)
+      .eq("room_id", roomId)
+      .maybeSingle(),
+    supabase.from("players").select("*").eq("room_id", roomId),
+  ]);
+
+  if (roomResult.error) {
+    throw new Error(asMessage(roomResult.error));
+  }
+  if (!roomResult.data) {
+    throw new Error("Room not found.");
+  }
+  if (playerResult.error) {
+    throw new Error(asMessage(playerResult.error));
+  }
+  if (!playerResult.data || !(playerResult.data as Player).is_host) {
+    throw new Error("Only the room creator can play again.");
+  }
+  if (playersResult.error) {
+    throw new Error(asMessage(playersResult.error));
+  }
+
+  const roomPlayers = (playersResult.data ?? []) as Player[];
+  const resetResults = await Promise.all([
+    ...roomPlayers.map((player) =>
+      supabase.from("players").update({ score: 0 }).eq("id", player.id),
+    ),
+    supabase.from("prompts").delete().eq("room_id", roomId),
+    supabase.from("confessions").delete().eq("room_id", roomId),
+    supabase.from("guesses").delete().eq("room_id", roomId),
+    supabase
+      .from("rooms")
+      .update({
+        phase: "lobby",
+        current_prompt_index: 0,
+        reveal_player_index: 0,
+        reveal_truth_visible: false,
+        phase_deadline_at: null,
+      })
+      .eq("id", roomId),
+  ]);
+
+  throwOnResultError(resetResults);
 }
 
 export function getRoundProgress(snapshot: GameSnapshot) {

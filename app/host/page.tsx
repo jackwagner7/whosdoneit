@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { EntryProfileForm } from "@/components/entry-profile-form";
 import { createRoom } from "@/lib/game";
+import { getStoredHostSettings } from "@/lib/host-settings-preferences";
 import {
   getStoredPlayerPreferences,
   setStoredPlayerPreferences,
@@ -11,6 +12,7 @@ import {
 
 export default function HostPage() {
   const [defaults] = useState(() => getStoredPlayerPreferences());
+  const [hostSettings] = useState(() => getStoredHostSettings());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
@@ -27,6 +29,7 @@ export default function HostPage() {
       const { room, player } = await createRoom(values.name.trim(), {
         playerColor: values.color,
         playerEmoji: values.emoji,
+        settings: hostSettings,
       });
       setStoredPlayerPreferences({
         name: player.name,

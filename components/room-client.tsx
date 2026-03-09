@@ -11,19 +11,25 @@ import { LeaderboardStage } from "@/components/room/leaderboard-stage";
 import { LobbyStage } from "@/components/room/lobby-stage";
 import { ProfileSettingsSheet } from "@/components/room/profile-settings-sheet";
 import { PromptingStage } from "@/components/room/prompting-stage";
+import { RevealSummaryStage } from "@/components/room/reveal-summary-stage";
 import { RevealingStage } from "@/components/room/revealing-stage";
 import { SettingsSheet } from "@/components/room/settings-sheet";
 import {
+  addFakePlayers,
   advanceReveal,
   buildColorChoices,
   buildEmojiChoices,
   DEFAULT_PLAYER_COLOR,
   DEFAULT_PLAYER_EMOJI,
   getGameSnapshotByCode,
+  getRoundCursor,
   getRoundProgress,
   joinRoom,
   maybeAdvanceRoom,
+  playAgainToLobby,
   revealCurrentPlayer,
+  refreshColorChoices,
+  refreshEmojiChoices,
   startGame,
   startNextRound,
   submitConfession,
@@ -33,6 +39,7 @@ import {
   updatePlayerProfile,
   updateRoomSettings,
 } from "@/lib/game";
+import { setStoredHostSettings } from "@/lib/host-settings-preferences";
 import {
   getStoredPlayerPreferences,
   setStoredPlayerPreferences,
@@ -77,9 +84,11 @@ export function RoomClient({ code }: RoomClientProps) {
   const [promptText, setPromptText] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsSaving, setSettingsSaving] = useState(false);
+  const [addingFakePlayers, setAddingFakePlayers] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
   const [joinDefaults] = useState(() => getStoredPlayerPreferences());
   const [profileDraft, setProfileDraft] = useState<ProfileDraft>({
     name: joinDefaults.name,
@@ -186,6 +195,20 @@ export function RoomClient({ code }: RoomClientProps) {
     setStoredPlayerPreferences({ name: me.name, color: me.color, emoji: me.emoji });
   }, [me, snapshot]);
 
+  useEffect(() => {
+    if (!snapshot || !me || !me.is_host) {
+      return;
+    }
+
+    setStoredHostSettings({
+      promptSeconds: snapshot.room.prompt_seconds,
+      roundCount: snapshot.room.round_count,
+      answeringSeconds: snapshot.room.answering_seconds,
+      guessingSeconds: snapshot.room.guessing_seconds,
+      revealSeconds: snapshot.room.reveal_seconds,
+    });
+  }, [me, snapshot]);
+
   const myPrompt = useMemo(() => {
     if (!snapshot || !me) {
       return null;
@@ -210,6 +233,10 @@ export function RoomClient({ code }: RoomClientProps) {
 
   const round = useMemo(
     () => (snapshot ? getRoundProgress(snapshot) : null),
+    [snapshot],
+  );
+  const roundCursor = useMemo(
+    () => (snapshot ? getRoundCursor(snapshot.room) : { roundIndex: 0, promptIndex: 0 }),
     [snapshot],
   );
   const leaderboard = useMemo(
@@ -327,6 +354,7 @@ export function RoomClient({ code }: RoomClientProps) {
       setActionError(null);
       try {
         await updateRoomSettings(snapshot.room.id, me.id, settings);
+        setStoredHostSettings(settings);
         setSettingsOpen(false);
         await loadSnapshot();
       } catch (issue) {
@@ -338,42 +366,58 @@ export function RoomClient({ code }: RoomClientProps) {
     [loadSnapshot, me, snapshot],
   );
 
+  const handleAddFakePlayers = useCallback(
+    async (count: number) => {
+      if (!snapshot || !me || !me.is_host) {
+        return;
+      }
+
+      setAddingFakePlayers(true);
+      setActionError(null);
+      try {
+        await addFakePlayers(snapshot.room.id, me.id, count);
+        await loadSnapshot();
+      } catch (issue) {
+        setActionError(
+          issue instanceof Error ? issue.message : "Could not add fake players.",
+        );
+      } finally {
+        setAddingFakePlayers(false);
+      }
+    },
+    [loadSnapshot, me, snapshot],
+  );
+
   const refreshProfileColors = useCallback(() => {
     setProfileColorOptions((previousOptions) => {
-      const nextOptions = buildColorChoices({
-        selectedColor: profileDraft.color,
+      const nextOptions = refreshColorChoices({
         previousChoices: previousOptions,
         takenColors: takenColorsForProfile,
       });
 
-      if (!nextOptions.includes(profileDraft.color)) {
-        setProfileDraft((current) => ({
-          ...current,
-          color: nextOptions[0] ?? DEFAULT_PLAYER_COLOR,
-        }));
-      }
+      setProfileDraft((current) => ({
+        ...current,
+        color: nextOptions[0] ?? DEFAULT_PLAYER_COLOR,
+      }));
 
       return nextOptions;
     });
-  }, [profileDraft.color, takenColorsForProfile]);
+  }, [takenColorsForProfile]);
 
   const refreshProfileEmojis = useCallback(() => {
     setProfileEmojiOptions((previousOptions) => {
-      const nextOptions = buildEmojiChoices({
-        selectedEmoji: profileDraft.emoji,
+      const nextOptions = refreshEmojiChoices({
         previousChoices: previousOptions,
       });
 
-      if (!nextOptions.includes(profileDraft.emoji)) {
-        setProfileDraft((current) => ({
-          ...current,
-          emoji: nextOptions[0] ?? DEFAULT_PLAYER_EMOJI,
-        }));
-      }
+      setProfileDraft((current) => ({
+        ...current,
+        emoji: nextOptions[0] ?? DEFAULT_PLAYER_EMOJI,
+      }));
 
       return nextOptions;
     });
-  }, [profileDraft.emoji]);
+  }, []);
 
   const handleSaveProfile = useCallback(async () => {
     if (!snapshot || !me) {
@@ -401,10 +445,21 @@ export function RoomClient({ code }: RoomClientProps) {
     }
   }, [loadSnapshot, me, profileDraft, snapshot]);
 
+  const handleCopyRoomLink = useCallback(async () => {
+    try {
+      const roomLink = `${window.location.origin}/room/${normalizedCode}`;
+      await navigator.clipboard.writeText(roomLink);
+      setLinkCopied(true);
+      window.setTimeout(() => setLinkCopied(false), 1200);
+    } catch {
+      setLinkCopied(false);
+    }
+  }, [normalizedCode]);
+
   if (loading) {
     return (
       <main className="app-page">
-        <div className="app-page-card app-page-card-wide app-page-card-mobile-fill flex flex-col">
+        <div className="app-page-card app-page-card-wide app-page-card-mobile-fill h-[calc(100svh-1.5rem)] max-h-[calc(100svh-1.5rem)] sm:h-[80vh] sm:max-h-[80vh] flex flex-col overflow-hidden">
           <AppBanner />
           <div className="flex flex-1 items-center justify-center">
             <div className="grid justify-items-center gap-3">
@@ -423,7 +478,8 @@ export function RoomClient({ code }: RoomClientProps) {
   if (error || !snapshot) {
     return (
       <main className="app-page">
-        <div className="app-page-card app-page-card-wide app-page-card-mobile-fill">
+        <div className="app-page-card app-page-card-wide app-page-card-mobile-fill h-[calc(100svh-1.5rem)] max-h-[calc(100svh-1.5rem)] sm:h-[80vh] sm:max-h-[80vh] overflow-hidden">
+          <AppBanner />
           <p className="text-xl font-bold">Room unavailable</p>
           <p className="mt-2 text-sm text-slate-600">{error ?? "Unknown error."}</p>
         </div>
@@ -467,6 +523,19 @@ export function RoomClient({ code }: RoomClientProps) {
     .map((entry) => `${entry.target_player_id}:${entry.guessed_answer ? "1" : "0"}`)
     .sort()
     .join("|");
+  const expectedGuessesPerPlayer = Math.max(sortedPlayers.length - 1, 0);
+  const guessesByGuesser = new Map<string, number>();
+  guesses.forEach((entry) => {
+    guessesByGuesser.set(
+      entry.guessing_player_id,
+      (guessesByGuesser.get(entry.guessing_player_id) ?? 0) + 1,
+    );
+  });
+  const submittedGuessPlayerCount = sortedPlayers.reduce(
+    (count, player) =>
+      count + ((guessesByGuesser.get(player.id) ?? 0) >= expectedGuessesPerPlayer ? 1 : 0),
+    0,
+  );
 
   const revealTarget =
     snapshot.room.phase === "revealing"
@@ -492,30 +561,58 @@ export function RoomClient({ code }: RoomClientProps) {
       guessedAnswer: entry.guessed_answer,
       correct: typeof truth === "boolean" && entry.guessed_answer === truth,
     }));
+  const confessionByPlayerId = new Map(
+    confessions.map((entry) => [entry.player_id, entry.answer]),
+  );
+  const revealTruthRows = sortedPlayers.map((player) => ({
+    id: player.id,
+    name: player.name,
+    color: player.color,
+    emoji: player.emoji,
+    answer: confessionByPlayerId.get(player.id) === true,
+  }));
 
   const hasNextRound =
-    snapshot.room.current_prompt_index + 1 < Math.max(snapshot.prompts.length, 1);
+    roundCursor.promptIndex + 1 < snapshot.prompts.length ||
+    roundCursor.roundIndex + 1 < snapshot.room.round_count;
+  const questionsPerRound = Math.max(snapshot.prompts.length, 1);
+  const totalQuestions = Math.max(questionsPerRound * snapshot.room.round_count, 1);
+  const questionNumber = Math.min(
+    totalQuestions,
+    roundCursor.roundIndex * questionsPerRound + roundCursor.promptIndex + 1,
+  );
 
   return (
-    <main className="app-page pb-28">
-      <div className="app-page-card app-page-card-wide app-page-card-mobile-fill flex flex-col">
-        {snapshot.room.phase === "lobby" ? <AppBanner /> : null}
+    <main className="app-page">
+      <div className="app-page-card app-page-card-wide app-page-card-mobile-fill h-[calc(100svh-1.5rem)] max-h-[calc(100svh-1.5rem)] sm:h-[80vh] sm:max-h-[80vh] relative flex flex-col overflow-hidden">
+        <AppBanner />
 
-        <div className={`flex flex-1 flex-col gap-3 ${snapshot.room.phase === "lobby" ? "pt-4" : ""}`}>
-          <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex min-h-0 flex-1 flex-col gap-3 pt-3">
+          <section className="-mx-[var(--card-padding)] border-b border-slate-200 px-[var(--card-padding)] pb-3">
             <div className="flex items-center justify-between gap-2">
-              <p className="text-sm font-black tracking-[0.08em]">
-                Room Code: {snapshot.room.code}
-              </p>
               <div className="flex items-center gap-2">
+                <p className="text-base font-black tracking-[0.08em] sm:text-lg">
+                  Code: {snapshot.room.code}
+                </p>
                 <button
-                  aria-label="Profile settings"
-                  className="rounded-xl border border-slate-300 px-3 py-2 text-2xl font-bold leading-none"
-                  onClick={openProfileSettings}
+                  className="rounded-lg border border-slate-300 px-2 py-1 text-xs font-bold uppercase tracking-[0.08em] text-slate-700"
+                  onClick={() => void handleCopyRoomLink()}
                   type="button"
                 >
-                  ⚙
+                  {linkCopied ? "Copied" : "Copy link"}
                 </button>
+              </div>
+              <div className="flex items-center gap-2">
+                {snapshot.room.phase === "lobby" ? (
+                  <button
+                    aria-label="Profile settings"
+                    className="rounded-xl border border-slate-300 px-3 py-2 text-2xl font-bold leading-none"
+                    onClick={openProfileSettings}
+                    type="button"
+                  >
+                    {"\uD83D\uDD8C\uFE0F"}
+                  </button>
+                ) : null}
                 {me.is_host ? (
                   <button
                     aria-label="Host game settings"
@@ -532,22 +629,11 @@ export function RoomClient({ code }: RoomClientProps) {
                     }}
                     type="button"
                   >
-                    ⏱
+                    {"\u2699\uFE0F"}
                   </button>
                 ) : null}
               </div>
             </div>
-            {snapshot.room.phase !== "lobby" ? (
-              <>
-                <p className="mt-2 text-lg font-bold" style={{ color: me.color }}>
-                  {me.name} {me.emoji}
-                </p>
-                <p className="text-sm text-slate-600">
-                  {snapshot.room.current_prompt_index + 1}/
-                  {Math.max(snapshot.prompts.length, 1)} | {snapshot.players.length} players
-                </p>
-              </>
-            ) : null}
             {actionError ? (
               <p className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
                 {actionError}
@@ -582,6 +668,7 @@ export function RoomClient({ code }: RoomClientProps) {
               playerCount={snapshot.players.length}
               promptReady={Boolean(myPrompt)}
               promptText={promptText}
+              currentRoundNumber={roundCursor.roundIndex + 1}
               roundCount={snapshot.room.round_count}
               submittedPromptCount={submittedPromptCount}
             />
@@ -609,10 +696,6 @@ export function RoomClient({ code }: RoomClientProps) {
               key={`${currentPrompt.id}:${myGuessSignature}`}
               busy={Boolean(busyAction)}
               deadlineAt={snapshot.room.phase_deadline_at}
-              expectedGuesses={round?.expectedGuesses ?? 0}
-              expectedMyGuessCount={Math.max(snapshot.players.length - 1, 0)}
-              guessCount={round?.guessCount ?? 0}
-              myGuessCount={myGuessRows.length}
               myGuesses={myGuessByTarget}
               onSubmit={(selectedTargetIds) =>
                 runAction("guess", async () => {
@@ -633,7 +716,9 @@ export function RoomClient({ code }: RoomClientProps) {
                 })
               }
               prompt={currentPrompt.text}
+              submittedPlayerCount={submittedGuessPlayerCount}
               targets={sortedPlayers.filter((player) => player.id !== me.id)}
+              totalPlayerCount={sortedPlayers.length}
             />
           ) : null}
 
@@ -664,50 +749,74 @@ export function RoomClient({ code }: RoomClientProps) {
             />
           ) : null}
 
+          {snapshot.room.phase === "revealing" && currentPrompt && !revealTarget ? (
+            <RevealSummaryStage
+              deadlineAt={snapshot.room.phase_deadline_at}
+              prompt={currentPrompt.text}
+              truthRows={revealTruthRows}
+            />
+          ) : null}
+
           {snapshot.room.phase === "leaderboard" ? (
             <LeaderboardStage
               busy={Boolean(busyAction)}
               hasNextRound={hasNextRound}
               myPlayerId={me.id}
+              questionNumber={questionNumber}
               onContinue={() =>
                 runAction("next-round", async () => {
                   await startNextRound(snapshot.room.id);
                 })
               }
               players={leaderboard}
+              totalQuestions={totalQuestions}
             />
           ) : null}
 
-          {snapshot.room.phase === "finished" ? <FinishedStage players={leaderboard} /> : null}
+          {snapshot.room.phase === "finished" ? (
+            <FinishedStage
+              busy={Boolean(busyAction)}
+              isHost={me.is_host}
+              onPlayAgain={() =>
+                runAction("play-again", async () => {
+                  await playAgainToLobby(snapshot.room.id, me.id);
+                })
+              }
+              players={leaderboard}
+            />
+          ) : null}
         </div>
-      </div>
 
-      <ProfileSettingsSheet
-        colorOptions={profileColorOptions}
-        emojiOptions={profileEmojiOptions}
-        error={profileError}
-        onChange={setProfileDraft}
-        onClose={() => setProfileOpen(false)}
-        onRefreshColors={refreshProfileColors}
-        onRefreshEmojis={refreshProfileEmojis}
-        onSave={handleSaveProfile}
-        open={profileOpen}
-        saving={profileSaving}
-        takenColors={takenColorsForProfile}
-        values={profileDraft}
-      />
-
-      {me.is_host ? (
-        <SettingsSheet
-          allowRoundControls={snapshot.room.phase === "lobby"}
-          onChange={setSettingsDraft}
-          onClose={() => setSettingsOpen(false)}
-          onSave={handleSaveSettings}
-          open={settingsOpen}
-          saving={settingsSaving}
-          values={settingsDraft}
+        <ProfileSettingsSheet
+          colorOptions={profileColorOptions}
+          emojiOptions={profileEmojiOptions}
+          error={profileError}
+          onChange={setProfileDraft}
+          onClose={() => setProfileOpen(false)}
+          onRefreshColors={refreshProfileColors}
+          onRefreshEmojis={refreshProfileEmojis}
+          onSave={handleSaveProfile}
+          open={profileOpen}
+          saving={profileSaving}
+          takenColors={takenColorsForProfile}
+          values={profileDraft}
         />
-      ) : null}
+
+        {me.is_host ? (
+          <SettingsSheet
+            addingFakePlayers={addingFakePlayers}
+            allowFakePlayers={snapshot.room.phase === "lobby"}
+            allowRoundControls={snapshot.room.phase === "lobby"}
+            onAddFakePlayers={handleAddFakePlayers}
+            onChange={setSettingsDraft}
+            onClose={() => setSettingsOpen(false)}
+            onSave={handleSaveSettings}
+            open={settingsOpen}
+            saving={settingsSaving}
+            values={settingsDraft}
+          />
+        ) : null}
+      </div>
     </main>
   );
 }

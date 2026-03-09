@@ -44,7 +44,7 @@ export function ProfileSettingsSheet({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end bg-black/40 p-3">
+    <div className="absolute inset-0 z-50 flex items-end bg-black/40 p-3">
       <div className="card-enter w-full rounded-3xl bg-white p-4 shadow-xl">
         <h3 className="text-2xl font-black">Profile</h3>
         <p className="mt-1 text-sm text-slate-600">Update your name, colour and emoji.</p>

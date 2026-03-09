@@ -116,7 +116,7 @@ export function EntryProfileForm({
   }
 
   return (
-    <div className="app-page-card app-page-card-mobile-fill flex flex-col">
+    <div className="app-page-card app-page-card-wide app-page-card-mobile-fill flex flex-col">
       <AppBanner />
 
       <div className="flex-1 grid content-center gap-4 pt-4">

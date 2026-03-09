@@ -8,7 +8,7 @@
 .app-page-card {
   --card-padding: 1rem;
   margin: 0 auto;
-  max-width: 28rem;
+  max-width: 40rem;
   border: 1px solid #e2e8f0;
   border-radius: 1.5rem;
   background: #ffffff;
@@ -36,24 +36,63 @@
   color: #ffffff;
   padding: 0.85rem 1rem;
   text-align: center;
-  font-size: 1rem;
+  font-size: 1.4rem;
   font-weight: 900;
   letter-spacing: 0.08em;
   line-height: 1.1;
 }
 
 .player-box {
+  display: inline-block;
+  width: fit-content;
+  max-width: 100%;
   border: 1px solid #cbd5e1;
   border-radius: 0.85rem;
   background: #fcf9f9;
-  padding: 0.55rem 0.65rem;
+  padding: 0.48rem 0.58rem;
   box-shadow: 0 8px 20px -14px rgb(15 23 42 / 0.45);
+}
+
+.player-box.player-box-lobby {
+  padding: 0.55rem 0.65rem;
+}
+
+.player-box.player-box-result-first {
+  padding: 0.6rem 0.72rem;
+}
+
+.player-box.player-box-result-other {
+  padding: 0.32rem 0.4rem;
 }
 
 .player-box-floating {
   margin: 0 auto 0.4rem;
   width: fit-content;
   max-width: 100%;
+}
+
+.player-box-selected-guilty {
+  border-color: #dc2626;
+  background: #fff1f2;
+  box-shadow: 0 0 0 2px #fecdd3;
+}
+
+.player-box-trial-correct-innocent {
+  border-width: 2px;
+  border-color: #0ea5e9;
+  background: #dbeafe;
+  box-shadow: 0 0 0 3px #bae6fd;
+}
+
+.player-box-trial-correct-guilty {
+  border-width: 2px;
+  border-color: #e11d48;
+  background: #ffe4e6;
+  box-shadow: 0 0 0 3px #fecdd3;
+}
+
+.player-box-trial-wrong {
+  opacity: 0.55;
 }
 
 .player-box-label {
@@ -68,9 +107,23 @@
 .player-box-value {
   margin-top: 0.15rem;
   text-align: center;
-  font-size: 1.35rem;
+  font-size: 1.2rem;
   font-weight: 800;
   line-height: 1.1;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.player-box.player-box-lobby .player-box-value {
+  font-size: 1.35rem;
+}
+
+.player-box.player-box-result-first .player-box-value {
+  font-size: 1.45rem;
+}
+
+.player-box.player-box-result-other .player-box-value {
+  font-size: 0.96rem;
 }
 
 .player-box-emoji {
@@ -78,6 +131,42 @@
   font-size: 1em;
   line-height: inherit;
   vertical-align: baseline;
+}
+
+.stage-heading {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  color: #64748b;
+}
+
+.stage-subheading {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #475569;
+}
+
+.guess-chip {
+  position: absolute;
+  right: -0.35rem;
+  top: -0.35rem;
+  border-radius: 9999px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  padding: 0.05rem 0.4rem;
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+.guess-chip-correct {
+  border-color: #10b981;
+  color: #047857;
+}
+
+.guess-chip-wrong {
+  border-color: #ef4444;
+  color: #b91c1c;
 }
 
 @media (min-width: 640px) {
@@ -94,6 +183,18 @@
   }
 
   .player-box-value {
+    font-size: 1.65rem;
+  }
+
+  .player-box.player-box-lobby .player-box-value {
     font-size: 1.8rem;
+  }
+
+  .player-box.player-box-result-first .player-box-value {
+    font-size: 1.95rem;
+  }
+
+  .player-box.player-box-result-other .player-box-value {
+    font-size: 1.3rem;
   }
 }

@@ -8,6 +8,7 @@ import {
   buildEmojiChoices,
   DEFAULT_PLAYER_COLOR,
   DEFAULT_PLAYER_EMOJI,
+  refreshEmojiChoices,
 } from "@/lib/game";
 
 type JoinInlineProps = {
@@ -108,11 +109,13 @@ export function JoinInline({
       <button
         className="mt-4 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm font-bold uppercase tracking-[0.12em] text-slate-700"
         disabled={loading}
-        onClick={() =>
-          setEmojiOptions((previousChoices) =>
-            buildEmojiChoices({ selectedEmoji: emoji, previousChoices }),
-          )
-        }
+        onClick={() => {
+          setEmojiOptions((previousChoices = []) => {
+            const nextOptions = refreshEmojiChoices({ previousChoices });
+            setEmoji(nextOptions[0] ?? DEFAULT_PLAYER_EMOJI);
+            return nextOptions;
+          });
+        }}
         type="button"
       >
         New emoji choices
