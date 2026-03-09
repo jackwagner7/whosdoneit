@@ -19,6 +19,7 @@ export type Room = {
   answering_seconds: number;
   guessing_seconds: number;
   reveal_seconds: number;
+  fast_mode: boolean;
   phase_deadline_at: string | null;
   created_at: string;
 };
@@ -77,6 +78,7 @@ export type RoomSettings = {
   answeringSeconds: number;
   guessingSeconds: number;
   revealSeconds: number;
+  fastMode: boolean;
 };
 
 export type PlayerProfile = {

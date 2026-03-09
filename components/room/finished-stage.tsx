@@ -60,6 +60,9 @@ export function FinishedStage({
   onPlayAgain,
 }: FinishedStageProps) {
   const winner = players[0] ?? null;
+  const hasSingleWinner =
+    winner !== null &&
+    players.filter((player) => player.score === winner.score).length === 1;
   const placementRows = buildPlacementRows(players);
 
   return (
@@ -69,7 +72,9 @@ export function FinishedStage({
         <p className="stage-subheading">{players.length} players</p>
       </header>
       <h2 className="mt-2 shrink-0 text-3xl font-black">
-        {winner ? `${winner.name} ${winner.emoji} wins` : "Game complete"}
+        {winner && hasSingleWinner
+          ? `${winner.name} ${winner.emoji} wins`
+          : "Game complete"}
       </h2>
       <div className="mt-3 min-h-0 flex-1 overflow-y-auto overflow-x-hidden pr-1">
         <ol className="grid gap-3">

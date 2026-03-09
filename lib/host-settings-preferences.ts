@@ -8,6 +8,7 @@ const DEFAULT_HOST_SETTINGS: RoomSettings = {
   answeringSeconds: 25,
   guessingSeconds: 35,
   revealSeconds: 8,
+  fastMode: false,
 };
 
 function clampSeconds(value: number, fallback: number) {
@@ -46,6 +47,10 @@ function sanitizeHostSettings(settings?: Partial<RoomSettings> | null): RoomSett
       Number(settings?.revealSeconds),
       DEFAULT_HOST_SETTINGS.revealSeconds,
     ),
+    fastMode:
+      typeof settings?.fastMode === "boolean"
+        ? settings.fastMode
+        : DEFAULT_HOST_SETTINGS.fastMode,
   };
 }
 

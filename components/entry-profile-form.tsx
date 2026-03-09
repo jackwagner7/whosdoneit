@@ -49,12 +49,12 @@ function randomOption(options: string[], fallback: string, excluded?: string) {
 
 function buildInitialColorState(initialColor: string): PickerState {
   const options = buildColorChoices({ selectedColor: initialColor || DEFAULT_PLAYER_COLOR });
-  return { options, value: randomOption(options, DEFAULT_PLAYER_COLOR) };
+  return { options, value: options[0] ?? DEFAULT_PLAYER_COLOR };
 }
 
 function buildInitialEmojiState(initialEmoji: string): PickerState {
   const options = buildEmojiChoices({ selectedEmoji: initialEmoji || DEFAULT_PLAYER_EMOJI });
-  return { options, value: randomOption(options, DEFAULT_PLAYER_EMOJI) };
+  return { options, value: options[0] ?? DEFAULT_PLAYER_EMOJI };
 }
 
 export function EntryProfileForm({

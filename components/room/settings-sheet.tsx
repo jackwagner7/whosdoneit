@@ -10,6 +10,7 @@ type SettingsSheetProps = {
     answeringSeconds: number;
     guessingSeconds: number;
     revealSeconds: number;
+    fastMode: boolean;
   };
   saving: boolean;
   addingFakePlayers: boolean;
@@ -21,6 +22,7 @@ type SettingsSheetProps = {
     answeringSeconds: number;
     guessingSeconds: number;
     revealSeconds: number;
+    fastMode: boolean;
   }) => void;
   onAddFakePlayers: (count: number) => Promise<void>;
   onClose: () => void;
@@ -30,6 +32,7 @@ type SettingsSheetProps = {
     answeringSeconds: number;
     guessingSeconds: number;
     revealSeconds: number;
+    fastMode: boolean;
   }) => Promise<void>;
 };
 
@@ -151,6 +154,21 @@ export function SettingsSheet({
               type="number"
               value={values.revealSeconds}
             />
+          </label>
+
+          <label className="flex items-center gap-3 rounded-xl border border-slate-300 px-3 py-3">
+            <input
+              checked={values.fastMode}
+              className="h-5 w-5 accent-black"
+              onChange={(event) =>
+                onChange({
+                  ...values,
+                  fastMode: event.target.checked,
+                })
+              }
+              type="checkbox"
+            />
+            <span className="text-sm font-semibold">Fast mode (skip Trial)</span>
           </label>
         </div>
         {!allowRoundControls ? (

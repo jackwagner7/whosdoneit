@@ -1,4 +1,5 @@
 import type { RealtimeChannel } from "@supabase/supabase-js";
+import { PLAYER_EMOJI_POOL } from "@/lib/player-emoji-pool";
 import { supabase } from "@/lib/supabase";
 import type {
   Confession,
@@ -26,6 +27,7 @@ const DEFAULT_ROOM_SETTINGS: RoomSettings = {
   answeringSeconds: 25,
   guessingSeconds: 35,
   revealSeconds: 8,
+  fastMode: false,
 };
 
 export const PLAYER_COLOR_POOL = [
@@ -51,89 +53,7 @@ export const PLAYER_COLOR_POOL = [
   "#475569",
 ] as const;
 
-export const PLAYER_EMOJI_POOL = [
-  "😀",
-  "😃",
-  "😄",
-  "😁",
-  "😆",
-  "😅",
-  "😂",
-  "🤣",
-  "🙂",
-  "😊",
-  "😇",
-  "🙃",
-  "😉",
-  "😌",
-  "😍",
-  "🥰",
-  "😘",
-  "😋",
-  "😛",
-  "😜",
-  "🤪",
-  "🤨",
-  "🧐",
-  "🤓",
-  "😎",
-  "🤩",
-  "🥳",
-  "😏",
-  "😬",
-  "🤗",
-  "🤭",
-  "🤫",
-  "🤔",
-  "🫡",
-  "🫠",
-  "😴",
-  "🤤",
-  "😺",
-  "😸",
-  "😹",
-  "😻",
-  "😼",
-  "🙈",
-  "🙉",
-  "🙊",
-  "🦊",
-  "🐼",
-  "🐸",
-  "🐵",
-  "🦁",
-  "🐯",
-  "🐨",
-  "🐧",
-  "🐙",
-  "🦄",
-  "🐲",
-  "👻",
-  "🤖",
-  "👽",
-  "🎃",
-  "🌞",
-  "🌈",
-  "🔥",
-  "⚡",
-  "💥",
-  "✨",
-  "🎉",
-  "🎯",
-  "🧠",
-  "🕵️",
-  "🧩",
-  "🎲",
-  "🍕",
-  "🍔",
-  "🍟",
-  "🌮",
-  "🍩",
-  "🍪",
-  "🍉",
-  "🍓",
-  "🍒",
-] as const;
+export { PLAYER_EMOJI_POOL };
 
 export const DEFAULT_PLAYER_COLOR = PLAYER_COLOR_POOL[0];
 export const DEFAULT_PLAYER_EMOJI = PLAYER_EMOJI_POOL[0];
@@ -437,11 +357,21 @@ function sanitizeSettings(
         baseSettings?.revealSeconds ??
         DEFAULT_ROOM_SETTINGS.revealSeconds,
     ),
+    fastMode:
+      typeof settings?.fastMode === "boolean"
+        ? settings.fastMode
+        : typeof baseSettings?.fastMode === "boolean"
+          ? baseSettings.fastMode
+          : DEFAULT_ROOM_SETTINGS.fastMode,
   };
 }
 
 function addSecondsToNow(seconds: number) {
   return new Date(Date.now() + Math.max(1, seconds) * 1000).toISOString();
+}
+
+function addMillisecondsToNow(milliseconds: number) {
+  return new Date(Date.now() + Math.max(1, Math.round(milliseconds))).toISOString();
 }
 
 function hasDeadlinePassed(deadline: string | null) {
@@ -453,6 +383,264 @@ function hasDeadlinePassed(deadline: string | null) {
 
 function getExpectedGuessCount(playerCount: number) {
   return playerCount * Math.max(playerCount - 1, 0);
+}
+
+const REVEAL_MAJORITY_THRESHOLD = 0.79;
+const REVEAL_WAIT_MS = {
+  quick: 240,
+  normal: 560,
+  dramatic: 1300,
+} as const;
+const PRETRUTH_REVEAL_SYNC_BUFFER_MS = 700;
+
+type RevealWaitKey = keyof typeof REVEAL_WAIT_MS;
+const PRE_GUESS_WAIT_KEY: RevealWaitKey = "dramatic";
+type RevealGroupKey = "innocent" | "guilty";
+type RevealTimingPlan = {
+  groupOrder: RevealGroupKey[];
+  primaryDropWait: RevealWaitKey;
+  secondaryDropWait: RevealWaitKey;
+  betweenGroupWait: RevealWaitKey;
+  revealWait: RevealWaitKey;
+};
+
+export function getConfessionParticipants(players: Player[], confessions: Confession[]) {
+  const participantIds = new Set(confessions.map((entry) => entry.player_id));
+  return players.filter((player) => participantIds.has(player.id));
+}
+
+function getRevealInterestBucket(params: {
+  truth: boolean;
+  guessedInnocentCount: number;
+  guessedGuiltyCount: number;
+}) {
+  const totalGuesses = params.guessedInnocentCount + params.guessedGuiltyCount;
+  if (totalGuesses <= 0) {
+    return 9;
+  }
+
+  const innocentRatio = params.guessedInnocentCount / totalGuesses;
+  const guiltyRatio = params.guessedGuiltyCount / totalGuesses;
+  const allInnocent = params.guessedInnocentCount === totalGuesses;
+  const allGuilty = params.guessedGuiltyCount === totalGuesses;
+
+  if (allInnocent && params.truth === false) {
+    return 1;
+  }
+  if (allInnocent && params.truth === true) {
+    return 2;
+  }
+  if (innocentRatio > REVEAL_MAJORITY_THRESHOLD && params.truth === false) {
+    return 3;
+  }
+  if (innocentRatio > REVEAL_MAJORITY_THRESHOLD && params.truth === true) {
+    return 4;
+  }
+  if (allGuilty && params.truth === true) {
+    return 5;
+  }
+  if (allGuilty && params.truth === false) {
+    return 6;
+  }
+  if (guiltyRatio > REVEAL_MAJORITY_THRESHOLD && params.truth === true) {
+    return 7;
+  }
+  if (guiltyRatio > REVEAL_MAJORITY_THRESHOLD && params.truth === false) {
+    return 8;
+  }
+
+  return 9;
+}
+
+export function getRevealPlayersForPrompt(
+  players: Player[],
+  confessions: Confession[],
+  guesses: Guess[],
+) {
+  const participants = getConfessionParticipants(players, confessions);
+  const participantIds = new Set(participants.map((player) => player.id));
+  const truthByPlayer = new Map(confessions.map((entry) => [entry.player_id, entry.answer]));
+
+  const withInterest = participants.map((player) => {
+    const targetGuesses = guesses.filter(
+      (entry) =>
+        entry.target_player_id === player.id &&
+        participantIds.has(entry.guessing_player_id),
+    );
+    const guessedInnocentCount = targetGuesses.filter(
+      (entry) => entry.guessed_answer === false,
+    ).length;
+    const guessedGuiltyCount = targetGuesses.length - guessedInnocentCount;
+    const truth = truthByPlayer.get(player.id) === true;
+
+    return {
+      player,
+      interestBucket: getRevealInterestBucket({
+        truth,
+        guessedInnocentCount,
+        guessedGuiltyCount,
+      }),
+      guessedInnocentCount,
+      guessedGuiltyCount,
+    };
+  });
+
+  return withInterest
+    .sort(
+      (left, right) =>
+        left.interestBucket - right.interestBucket ||
+        right.guessedInnocentCount + right.guessedGuiltyCount -
+          (left.guessedInnocentCount + left.guessedGuiltyCount) ||
+        left.player.created_at.localeCompare(right.player.created_at) ||
+        left.player.id.localeCompare(right.player.id),
+    )
+    .map((entry) => entry.player);
+}
+
+function getRevealTimingPlanForBucket(bucket: number): RevealTimingPlan {
+  const defaults: RevealTimingPlan = {
+    groupOrder: ["innocent", "guilty"],
+    primaryDropWait: "normal",
+    secondaryDropWait: "normal",
+    betweenGroupWait: "normal",
+    revealWait: "dramatic",
+  };
+
+  switch (bucket) {
+    case 1:
+      return {
+        ...defaults,
+        groupOrder: ["innocent", "guilty"],
+        primaryDropWait: "quick",
+        secondaryDropWait: "quick",
+        betweenGroupWait: "quick",
+        revealWait: "normal",
+      };
+    case 2:
+      return {
+        ...defaults,
+        groupOrder: ["innocent", "guilty"],
+        primaryDropWait: "quick",
+        secondaryDropWait: "quick",
+        betweenGroupWait: "quick",
+        revealWait: "dramatic",
+      };
+    case 3:
+      return {
+        ...defaults,
+        groupOrder: ["innocent", "guilty"],
+        primaryDropWait: "quick",
+        secondaryDropWait: "quick",
+        betweenGroupWait: "dramatic",
+        revealWait: "normal",
+      };
+    case 4:
+      return {
+        ...defaults,
+        groupOrder: ["innocent", "guilty"],
+        primaryDropWait: "quick",
+        secondaryDropWait: "normal",
+        betweenGroupWait: "dramatic",
+        revealWait: "dramatic",
+      };
+    case 5:
+      return {
+        ...defaults,
+        groupOrder: ["guilty", "innocent"],
+        primaryDropWait: "quick",
+        secondaryDropWait: "quick",
+        betweenGroupWait: "quick",
+        revealWait: "normal",
+      };
+    case 6:
+      return {
+        ...defaults,
+        groupOrder: ["guilty", "innocent"],
+        primaryDropWait: "quick",
+        secondaryDropWait: "quick",
+        betweenGroupWait: "quick",
+        revealWait: "dramatic",
+      };
+    case 7:
+      return {
+        ...defaults,
+        groupOrder: ["guilty", "innocent"],
+        primaryDropWait: "quick",
+        secondaryDropWait: "quick",
+        betweenGroupWait: "dramatic",
+        revealWait: "normal",
+      };
+    case 8:
+      return {
+        ...defaults,
+        groupOrder: ["guilty", "innocent"],
+        primaryDropWait: "quick",
+        secondaryDropWait: "normal",
+        betweenGroupWait: "dramatic",
+        revealWait: "dramatic",
+      };
+    default:
+      return defaults;
+  }
+}
+
+function getPretruthRevealWaitMilliseconds(params: {
+  guessedInnocentCount: number;
+  guessedGuiltyCount: number;
+  truth: boolean;
+}) {
+  const bucket = getRevealInterestBucket(params);
+  const plan = getRevealTimingPlanForBucket(bucket);
+  const innocentCount = params.guessedInnocentCount;
+  const guiltyCount = params.guessedGuiltyCount;
+  const primaryCount = plan.groupOrder[0] === "innocent" ? innocentCount : guiltyCount;
+  const secondaryCount = plan.groupOrder[1] === "innocent" ? innocentCount : guiltyCount;
+
+  let totalMs = REVEAL_WAIT_MS[PRE_GUESS_WAIT_KEY] + REVEAL_WAIT_MS[plan.revealWait];
+  if (primaryCount > 1) {
+    totalMs += (primaryCount - 1) * REVEAL_WAIT_MS[plan.primaryDropWait];
+  }
+  if (secondaryCount > 1) {
+    totalMs += (secondaryCount - 1) * REVEAL_WAIT_MS[plan.secondaryDropWait];
+  }
+  if (primaryCount > 0 && secondaryCount > 0) {
+    totalMs += REVEAL_WAIT_MS[plan.betweenGroupWait];
+  }
+
+  return totalMs + PRETRUTH_REVEAL_SYNC_BUFFER_MS;
+}
+
+function getPretruthRevealDeadline(params: {
+  revealPlayers: Player[];
+  confessions: Confession[];
+  guesses: Guess[];
+  revealPlayerIndex: number;
+}) {
+  const target = params.revealPlayers[params.revealPlayerIndex];
+  if (!target) {
+    return null;
+  }
+
+  const revealPlayerIds = new Set(params.revealPlayers.map((player) => player.id));
+  const targetGuesses = params.guesses.filter(
+    (entry) =>
+      entry.target_player_id === target.id &&
+      revealPlayerIds.has(entry.guessing_player_id),
+  );
+  const guessedInnocentCount = targetGuesses.filter(
+    (entry) => entry.guessed_answer === false,
+  ).length;
+  const guessedGuiltyCount = targetGuesses.length - guessedInnocentCount;
+  const truth =
+    params.confessions.find((entry) => entry.player_id === target.id)?.answer === true;
+
+  return addMillisecondsToNow(
+    getPretruthRevealWaitMilliseconds({
+      guessedInnocentCount,
+      guessedGuiltyCount,
+      truth,
+    }),
+  );
 }
 
 function decodeRoundPromptIndex(value: number) {
@@ -873,6 +1061,7 @@ export async function createRoom(hostName: string, options?: CreateRoomOptions) 
         answering_seconds: sanitizedSettings.answeringSeconds,
         guessing_seconds: sanitizedSettings.guessingSeconds,
         reveal_seconds: sanitizedSettings.revealSeconds,
+        fast_mode: sanitizedSettings.fastMode,
       })
       .select("*")
       .single();
@@ -1092,6 +1281,7 @@ export async function updateRoomSettings(
     answeringSeconds: room.answering_seconds,
     guessingSeconds: room.guessing_seconds,
     revealSeconds: room.reveal_seconds,
+    fastMode: room.fast_mode,
   });
 
   if (room.phase !== "lobby") {
@@ -1107,6 +1297,7 @@ export async function updateRoomSettings(
       answering_seconds: settings.answeringSeconds,
       guessing_seconds: settings.guessingSeconds,
       reveal_seconds: settings.revealSeconds,
+      fast_mode: settings.fastMode,
     })
     .eq("id", roomId);
 
@@ -1278,6 +1469,38 @@ export async function submitGuess(
   }
 }
 
+export async function submitGuesses(
+  roomId: string,
+  promptId: string,
+  guessingPlayerId: string,
+  guesses: Array<{
+    targetPlayerId: string;
+    guessedAnswer: boolean;
+  }>,
+) {
+  const payload = guesses
+    .filter((entry) => entry.targetPlayerId !== guessingPlayerId)
+    .map((entry) => ({
+      room_id: roomId,
+      prompt_id: promptId,
+      guessing_player_id: guessingPlayerId,
+      target_player_id: entry.targetPlayerId,
+      guessed_answer: entry.guessedAnswer,
+    }));
+
+  if (payload.length === 0) {
+    return;
+  }
+
+  const { error } = await supabase.from("guesses").upsert(payload, {
+    onConflict: "prompt_id,guessing_player_id,target_player_id",
+  });
+
+  if (error) {
+    throw new Error(asMessage(error));
+  }
+}
+
 export async function maybeAdvanceRoom(roomId: string) {
   const snapshot = await getGameSnapshotByRoomId(roomId);
   const { room } = snapshot;
@@ -1419,9 +1642,15 @@ export async function maybeAdvanceRoom(roomId: string) {
     let phasePrompt = currentPrompt;
     let phaseGuesses = roundGuesses;
     let phaseConfessions = roundConfessions;
+    let phaseParticipants = getConfessionParticipants(phasePlayers, phaseConfessions);
 
     if (hasTestBots) {
-      await submitTestBotGuesses(roomId, currentPrompt.id, players, roundGuesses);
+      await submitTestBotGuesses(
+        roomId,
+        currentPrompt.id,
+        phaseParticipants,
+        roundGuesses,
+      );
       phaseSnapshot = await getGameSnapshotByRoomId(roomId);
       phaseRoom = phaseSnapshot.room;
       if (phaseRoom.phase !== "guessing") {
@@ -1438,10 +1667,21 @@ export async function maybeAdvanceRoom(roomId: string) {
       phaseGuesses = phaseSnapshot.guesses.filter(
         (entry) => entry.prompt_id === phasePrompt.id,
       );
+      phaseParticipants = getConfessionParticipants(phasePlayers, phaseConfessions);
     }
 
-    const expectedGuesses = getExpectedGuessCount(phasePlayers.length);
-    const allGuessed = phaseGuesses.length >= expectedGuesses;
+    const phaseParticipantIds = new Set(phaseParticipants.map((player) => player.id));
+    const phaseParticipantConfessions = phaseConfessions.filter((entry) =>
+      phaseParticipantIds.has(entry.player_id),
+    );
+    const phaseParticipantGuesses = phaseGuesses.filter(
+      (entry) =>
+        phaseParticipantIds.has(entry.guessing_player_id) &&
+        phaseParticipantIds.has(entry.target_player_id),
+    );
+
+    const expectedGuesses = getExpectedGuessCount(phaseParticipants.length);
+    const allGuessed = phaseParticipantGuesses.length >= expectedGuesses;
     const timeoutReached = hasDeadlinePassed(phaseRoom.phase_deadline_at);
     if (!allGuessed && !timeoutReached) {
       return;
@@ -1449,18 +1689,34 @@ export async function maybeAdvanceRoom(roomId: string) {
 
     await applyPromptScoresOnce(
       phasePrompt.id,
-      phaseSnapshot.players,
-      phaseConfessions,
-      phaseGuesses,
+      phaseParticipants,
+      phaseParticipantConfessions,
+      phaseParticipantGuesses,
     );
+    const revealPlayers = getRevealPlayersForPrompt(
+      phaseParticipants,
+      phaseParticipantConfessions,
+      phaseParticipantGuesses,
+    );
+    const fastModeEnabled = phaseRoom.fast_mode === true;
+    const nextRevealIndex = fastModeEnabled ? revealPlayers.length : 0;
+    const nextRevealTruthVisible = fastModeEnabled;
+    const nextPhaseDeadlineAt = fastModeEnabled
+      ? addSecondsToNow(phaseRoom.reveal_seconds)
+      : getPretruthRevealDeadline({
+          revealPlayers,
+          confessions: phaseParticipantConfessions,
+          guesses: phaseParticipantGuesses,
+          revealPlayerIndex: 0,
+        });
 
     const { error } = await supabase
       .from("rooms")
       .update({
         phase: "revealing",
-        reveal_player_index: 0,
-        reveal_truth_visible: false,
-        phase_deadline_at: addSecondsToNow(phaseRoom.reveal_seconds),
+        reveal_player_index: nextRevealIndex,
+        reveal_truth_visible: nextRevealTruthVisible,
+        phase_deadline_at: nextPhaseDeadlineAt,
       })
       .eq("id", roomId)
       .eq("phase", "guessing")
@@ -1473,7 +1729,12 @@ export async function maybeAdvanceRoom(roomId: string) {
   }
 
   if (room.phase === "revealing") {
-    const currentRevealPlayer = players[room.reveal_player_index];
+    const revealPlayers = getRevealPlayersForPrompt(
+      players,
+      roundConfessions,
+      roundGuesses,
+    );
+    const currentRevealPlayer = revealPlayers[room.reveal_player_index];
     if (!currentRevealPlayer) {
       if (room.phase_deadline_at && !hasDeadlinePassed(room.phase_deadline_at)) {
         return;
@@ -1495,11 +1756,33 @@ export async function maybeAdvanceRoom(roomId: string) {
       return;
     }
 
-    if (!hasDeadlinePassed(room.phase_deadline_at)) {
-      return;
-    }
-
     if (!room.reveal_truth_visible) {
+      if (!room.phase_deadline_at) {
+        const { error } = await supabase
+          .from("rooms")
+          .update({
+            phase_deadline_at: getPretruthRevealDeadline({
+              revealPlayers,
+              confessions: roundConfessions,
+              guesses: roundGuesses,
+              revealPlayerIndex: room.reveal_player_index,
+            }),
+          })
+          .eq("id", roomId)
+          .eq("phase", "revealing")
+          .eq("reveal_player_index", room.reveal_player_index)
+          .eq("reveal_truth_visible", false);
+
+        if (error) {
+          throw new Error(asMessage(error));
+        }
+        return;
+      }
+
+      if (!hasDeadlinePassed(room.phase_deadline_at)) {
+        return;
+      }
+
       const { error } = await supabase
         .from("rooms")
         .update({
@@ -1517,12 +1800,16 @@ export async function maybeAdvanceRoom(roomId: string) {
       return;
     }
 
+    if (!room.phase_deadline_at || !hasDeadlinePassed(room.phase_deadline_at)) {
+      return;
+    }
+
     const nextIndex = room.reveal_player_index + 1;
-    if (nextIndex >= players.length) {
+    if (nextIndex >= revealPlayers.length) {
       const { error } = await supabase
         .from("rooms")
         .update({
-          reveal_player_index: players.length,
+          reveal_player_index: revealPlayers.length,
           reveal_truth_visible: true,
           phase_deadline_at: addSecondsToNow(room.reveal_seconds),
         })
@@ -1541,7 +1828,12 @@ export async function maybeAdvanceRoom(roomId: string) {
       .update({
         reveal_player_index: nextIndex,
         reveal_truth_visible: false,
-        phase_deadline_at: addSecondsToNow(room.reveal_seconds),
+        phase_deadline_at: getPretruthRevealDeadline({
+          revealPlayers,
+          confessions: roundConfessions,
+          guesses: roundGuesses,
+          revealPlayerIndex: nextIndex,
+        }),
       })
       .eq("id", roomId)
       .eq("phase", "revealing")
@@ -1556,18 +1848,37 @@ export async function maybeAdvanceRoom(roomId: string) {
 export async function revealCurrentPlayer(roomId: string, playerId: string) {
   const snapshot = await getGameSnapshotByRoomId(roomId);
   const players = getSortedPlayers(snapshot.players);
+  const actingPlayer = players.find((player) => player.id === playerId);
   const room = snapshot.room;
+  const currentPrompt = getCurrentPrompt(room, snapshot.prompts);
 
   if (room.phase !== "revealing") {
     throw new Error("Reveal step is not active.");
+  }
+  if (!currentPrompt) {
+    throw new Error("No prompt is active.");
   }
   if (room.reveal_truth_visible) {
     throw new Error("Already revealed.");
   }
 
-  const currentRevealPlayer = players[room.reveal_player_index];
-  if (!currentRevealPlayer || currentRevealPlayer.id !== playerId) {
-    throw new Error("Only the current reveal player can do that.");
+  const promptConfessions = snapshot.confessions.filter(
+    (entry) => entry.prompt_id === currentPrompt.id,
+  );
+  const promptGuesses = snapshot.guesses.filter(
+    (entry) => entry.prompt_id === currentPrompt.id,
+  );
+  const revealPlayers = getRevealPlayersForPrompt(
+    players,
+    promptConfessions,
+    promptGuesses,
+  );
+  const currentRevealPlayer = revealPlayers[room.reveal_player_index];
+  if (
+    !currentRevealPlayer ||
+    (currentRevealPlayer.id !== playerId && !actingPlayer?.is_host)
+  ) {
+    throw new Error("Only the current reveal player or host can do that.");
   }
 
   const { error } = await supabase
@@ -1589,26 +1900,67 @@ export async function revealCurrentPlayer(roomId: string, playerId: string) {
 export async function advanceReveal(roomId: string, playerId: string) {
   const snapshot = await getGameSnapshotByRoomId(roomId);
   const players = getSortedPlayers(snapshot.players);
+  const actingPlayer = players.find((player) => player.id === playerId);
   const room = snapshot.room;
+  const currentPrompt = getCurrentPrompt(room, snapshot.prompts);
 
   if (room.phase !== "revealing") {
     throw new Error("Reveal step is not active.");
   }
+  if (!currentPrompt) {
+    throw new Error("No prompt is active.");
+  }
+
+  const promptConfessions = snapshot.confessions.filter(
+    (entry) => entry.prompt_id === currentPrompt.id,
+  );
+  const promptGuesses = snapshot.guesses.filter(
+    (entry) => entry.prompt_id === currentPrompt.id,
+  );
+  const revealPlayers = getRevealPlayersForPrompt(
+    players,
+    promptConfessions,
+    promptGuesses,
+  );
+  const currentRevealPlayer = revealPlayers[room.reveal_player_index];
+  if (!currentRevealPlayer) {
+    if (!actingPlayer?.is_host) {
+      throw new Error("Only the room creator can do that.");
+    }
+
+    const { error } = await supabase
+      .from("rooms")
+      .update({
+        phase: "leaderboard",
+        phase_deadline_at: null,
+        reveal_truth_visible: false,
+      })
+      .eq("id", roomId)
+      .eq("phase", "revealing");
+
+    if (error) {
+      throw new Error(asMessage(error));
+    }
+    return;
+  }
+
   if (!room.reveal_truth_visible) {
     throw new Error("Reveal first.");
   }
 
-  const currentRevealPlayer = players[room.reveal_player_index];
-  if (!currentRevealPlayer || currentRevealPlayer.id !== playerId) {
-    throw new Error("Only the current reveal player can do that.");
+  if (
+    !currentRevealPlayer ||
+    (currentRevealPlayer.id !== playerId && !actingPlayer?.is_host)
+  ) {
+    throw new Error("Only the current reveal player or host can do that.");
   }
 
   const nextIndex = room.reveal_player_index + 1;
-  if (nextIndex >= players.length) {
+  if (nextIndex >= revealPlayers.length) {
     const { error } = await supabase
       .from("rooms")
       .update({
-        reveal_player_index: players.length,
+        reveal_player_index: revealPlayers.length,
         reveal_truth_visible: true,
         phase_deadline_at: addSecondsToNow(room.reveal_seconds),
       })
@@ -1627,7 +1979,12 @@ export async function advanceReveal(roomId: string, playerId: string) {
     .update({
       reveal_player_index: nextIndex,
       reveal_truth_visible: false,
-      phase_deadline_at: addSecondsToNow(room.reveal_seconds),
+      phase_deadline_at: getPretruthRevealDeadline({
+        revealPlayers,
+        confessions: promptConfessions,
+        guesses: promptGuesses,
+        revealPlayerIndex: nextIndex,
+      }),
     })
     .eq("id", roomId)
     .eq("phase", "revealing")
@@ -1786,6 +2143,7 @@ export function getRoundProgress(snapshot: GameSnapshot) {
     (confession) => confession.prompt_id === currentPrompt.id,
   );
   const guesses = snapshot.guesses.filter((guess) => guess.prompt_id === currentPrompt.id);
+  const confessionParticipants = getConfessionParticipants(players, confessions);
 
   return {
     players,
@@ -1795,7 +2153,7 @@ export function getRoundProgress(snapshot: GameSnapshot) {
     confessionCount: confessions.length,
     expectedConfessions: players.length,
     guessCount: guesses.length,
-    expectedGuesses: getExpectedGuessCount(players.length),
+    expectedGuesses: getExpectedGuessCount(confessionParticipants.length),
   };
 }
 

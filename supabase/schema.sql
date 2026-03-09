@@ -12,6 +12,7 @@ create table if not exists public.rooms (
   answering_seconds integer not null default 25,
   guessing_seconds integer not null default 35,
   reveal_seconds integer not null default 8,
+  fast_mode boolean not null default false,
   phase_deadline_at timestamptz,
   created_at timestamptz not null default now(),
   constraint rooms_phase_check check (

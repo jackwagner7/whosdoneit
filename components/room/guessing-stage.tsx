@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { PlayerBox } from "@/components/player-box";
 import { StageMetaBar } from "@/components/room/stage-meta-bar";
 import type { Player } from "@/types/games";
@@ -31,11 +31,40 @@ export function GuessingStage({
       .filter((target) => myGuesses.get(target.id) === true)
       .map((target) => target.id),
   );
+  const autoSubmittedRef = useRef(false);
 
   const selectedSet = useMemo(
     () => new Set(selectedTargetIds),
     [selectedTargetIds],
   );
+
+  useEffect(() => {
+    autoSubmittedRef.current = false;
+  }, [deadlineAt]);
+
+  useEffect(() => {
+    if (!deadlineAt || autoSubmittedRef.current) {
+      return;
+    }
+
+    const triggerAutoSubmit = () => {
+      if (autoSubmittedRef.current || busy) {
+        return;
+      }
+
+      autoSubmittedRef.current = true;
+      void onSubmit(selectedTargetIds);
+    };
+
+    const remainingMs = new Date(deadlineAt).getTime() - Date.now();
+    if (remainingMs <= 0) {
+      triggerAutoSubmit();
+      return;
+    }
+
+    const timeout = window.setTimeout(triggerAutoSubmit, remainingMs + 50);
+    return () => window.clearTimeout(timeout);
+  }, [busy, deadlineAt, onSubmit, selectedTargetIds]);
 
   return (
     <section className="card-enter -mx-[var(--card-padding)] flex min-h-0 min-w-0 flex-1 flex-col px-[var(--card-padding)] pb-5 pt-2">
@@ -88,7 +117,7 @@ export function GuessingStage({
           onClick={() => void onSubmit(selectedTargetIds)}
           type="button"
         >
-          {busy ? "..." : "Submit accusations"}
+          {busy ? "..." : "Submit"}
         </button>
       </div>
     </section>

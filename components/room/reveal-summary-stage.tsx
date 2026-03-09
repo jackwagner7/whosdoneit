@@ -15,12 +15,18 @@ type RevealSummaryStageProps = {
   prompt: string;
   truthRows: RevealTruthRow[];
   deadlineAt: string | null;
+  canAdvance: boolean;
+  busy: boolean;
+  onNext: () => Promise<void>;
 };
 
 export function RevealSummaryStage({
   prompt,
   truthRows,
   deadlineAt,
+  canAdvance,
+  busy,
+  onNext,
 }: RevealSummaryStageProps) {
   const innocentRows = truthRows.filter((row) => row.answer === false);
   const guiltyRows = truthRows.filter((row) => row.answer === true);
@@ -65,9 +71,22 @@ export function RevealSummaryStage({
           </div>
         </div>
       </div>
-      <p className="stage-subheading mt-3 shrink-0 border-t border-slate-200 pt-3 text-center">
-        Continuing...
-      </p>
+      {canAdvance ? (
+        <div className="mt-3 shrink-0 border-t border-slate-200 pt-3">
+          <button
+            className="w-full rounded-2xl bg-black px-4 py-3 text-xl font-bold text-white disabled:opacity-60"
+            disabled={busy}
+            onClick={() => void onNext()}
+            type="button"
+          >
+            {busy ? "..." : "Next"}
+          </button>
+        </div>
+      ) : (
+        <p className="stage-subheading mt-3 shrink-0 border-t border-slate-200 pt-3 text-center">
+          Waiting for host
+        </p>
+      )}
     </section>
   );
 }

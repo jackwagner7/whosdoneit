@@ -14,6 +14,7 @@ import { PromptingStage } from "@/components/room/prompting-stage";
 import { RevealSummaryStage } from "@/components/room/reveal-summary-stage";
 import { RevealingStage } from "@/components/room/revealing-stage";
 import { SettingsSheet } from "@/components/room/settings-sheet";
+import { SubmissionWaitingStage } from "@/components/room/submission-waiting-stage";
 import {
   addFakePlayers,
   advanceReveal,
@@ -24,16 +25,16 @@ import {
   getGameSnapshotByCode,
   getRoundCursor,
   getRoundProgress,
+  getRevealPlayersForPrompt,
   joinRoom,
   maybeAdvanceRoom,
   playAgainToLobby,
-  revealCurrentPlayer,
   refreshColorChoices,
   refreshEmojiChoices,
   startGame,
   startNextRound,
   submitConfession,
-  submitGuess,
+  submitGuesses,
   submitPrompt,
   subscribeToRoom,
   updatePlayerProfile,
@@ -56,6 +57,7 @@ type SettingsDraft = {
   answeringSeconds: number;
   guessingSeconds: number;
   revealSeconds: number;
+  fastMode: boolean;
 };
 
 type ProfileDraft = {
@@ -111,6 +113,7 @@ export function RoomClient({ code }: RoomClientProps) {
     answeringSeconds: 25,
     guessingSeconds: 35,
     revealSeconds: 8,
+    fastMode: false,
   });
 
   const loadSnapshot = useCallback(
@@ -206,6 +209,7 @@ export function RoomClient({ code }: RoomClientProps) {
       answeringSeconds: snapshot.room.answering_seconds,
       guessingSeconds: snapshot.room.guessing_seconds,
       revealSeconds: snapshot.room.reveal_seconds,
+      fastMode: snapshot.room.fast_mode === true,
     });
   }, [me, snapshot]);
 
@@ -345,6 +349,7 @@ export function RoomClient({ code }: RoomClientProps) {
       answeringSeconds: number;
       guessingSeconds: number;
       revealSeconds: number;
+      fastMode: boolean;
     }) => {
       if (!snapshot || !me || !me.is_host) {
         return;
@@ -514,6 +519,19 @@ export function RoomClient({ code }: RoomClientProps) {
   const guesses = round?.guesses ?? [];
   const sortedPlayers = round?.players ?? snapshot.players;
   const myConfession = confessions.find((entry) => entry.player_id === me.id);
+  const myConfessionAnswer = myConfession ? myConfession.answer : undefined;
+  const confessionParticipantIds = new Set(
+    confessions.map((entry) => entry.player_id),
+  );
+  const confessionParticipants = sortedPlayers.filter((player) =>
+    confessionParticipantIds.has(player.id),
+  );
+  const revealPlayers = getRevealPlayersForPrompt(
+    sortedPlayers,
+    confessions,
+    guesses,
+  );
+  const isConfessionParticipant = confessionParticipantIds.has(me.id);
 
   const myGuessRows = guesses.filter((entry) => entry.guessing_player_id === me.id);
   const myGuessByTarget = new Map(
@@ -523,7 +541,7 @@ export function RoomClient({ code }: RoomClientProps) {
     .map((entry) => `${entry.target_player_id}:${entry.guessed_answer ? "1" : "0"}`)
     .sort()
     .join("|");
-  const expectedGuessesPerPlayer = Math.max(sortedPlayers.length - 1, 0);
+  const expectedGuessesPerPlayer = Math.max(confessionParticipants.length - 1, 0);
   const guessesByGuesser = new Map<string, number>();
   guesses.forEach((entry) => {
     guessesByGuesser.set(
@@ -531,20 +549,30 @@ export function RoomClient({ code }: RoomClientProps) {
       (guessesByGuesser.get(entry.guessing_player_id) ?? 0) + 1,
     );
   });
-  const submittedGuessPlayerCount = sortedPlayers.reduce(
+  const submittedGuessPlayerCount = confessionParticipants.reduce(
     (count, player) =>
       count + ((guessesByGuesser.get(player.id) ?? 0) >= expectedGuessesPerPlayer ? 1 : 0),
     0,
   );
+  const myGuessSubmissionCount = guessesByGuesser.get(me.id) ?? 0;
+  const myGuessesSubmitted =
+    !isConfessionParticipant || myGuessSubmissionCount >= expectedGuessesPerPlayer;
+  const isGuessSubmitting =
+    snapshot.room.phase === "guessing" && busyAction === "guess";
+  const waitingGuessSubmittedCount =
+    submittedGuessPlayerCount +
+    (isGuessSubmitting && isConfessionParticipant && !myGuessesSubmitted ? 1 : 0);
 
   const revealTarget =
     snapshot.room.phase === "revealing"
-      ? sortedPlayers[snapshot.room.reveal_player_index] ?? null
+      ? revealPlayers[snapshot.room.reveal_player_index] ?? null
       : null;
   const truth = revealTarget
     ? confessions.find((entry) => entry.player_id === revealTarget.id)?.answer
     : undefined;
-  const canRevealControl = Boolean(revealTarget && revealTarget.id === me.id);
+  const canRevealControl = Boolean(
+    revealTarget && (revealTarget.id === me.id || me.is_host),
+  );
   const playersById = new Map(snapshot.players.map((player) => [player.id, player]));
   const revealGuessRows = (guesses ?? [])
     .filter((entry) => entry.target_player_id === revealTarget?.id)
@@ -564,7 +592,7 @@ export function RoomClient({ code }: RoomClientProps) {
   const confessionByPlayerId = new Map(
     confessions.map((entry) => [entry.player_id, entry.answer]),
   );
-  const revealTruthRows = sortedPlayers.map((player) => ({
+  const revealTruthRows = revealPlayers.map((player) => ({
     id: player.id,
     name: player.name,
     color: player.color,
@@ -619,14 +647,15 @@ export function RoomClient({ code }: RoomClientProps) {
                     className="rounded-xl border border-slate-300 px-3 py-2 text-2xl font-bold leading-none"
                     onClick={() => {
                       setSettingsDraft({
-                        promptSeconds: snapshot.room.prompt_seconds,
-                        roundCount: snapshot.room.round_count,
-                        answeringSeconds: snapshot.room.answering_seconds,
-                        guessingSeconds: snapshot.room.guessing_seconds,
-                        revealSeconds: snapshot.room.reveal_seconds,
-                      });
-                      setSettingsOpen(true);
-                    }}
+                      promptSeconds: snapshot.room.prompt_seconds,
+                      roundCount: snapshot.room.round_count,
+                      answeringSeconds: snapshot.room.answering_seconds,
+                      guessingSeconds: snapshot.room.guessing_seconds,
+                      revealSeconds: snapshot.room.reveal_seconds,
+                      fastMode: snapshot.room.fast_mode === true,
+                    });
+                    setSettingsOpen(true);
+                  }}
                     type="button"
                   >
                     {"\u2699\uFE0F"}
@@ -656,74 +685,101 @@ export function RoomClient({ code }: RoomClientProps) {
           ) : null}
 
           {snapshot.room.phase === "prompting" ? (
-            <PromptingStage
-              busy={Boolean(busyAction)}
-              deadlineAt={snapshot.room.phase_deadline_at}
-              onPromptTextChange={setPromptText}
-              onSubmitPrompt={() =>
-                runAction("prompt", async () => {
-                  await submitPrompt(snapshot.room.id, me.id, promptText);
-                })
-              }
-              playerCount={snapshot.players.length}
-              promptReady={Boolean(myPrompt)}
-              promptText={promptText}
-              currentRoundNumber={roundCursor.roundIndex + 1}
-              roundCount={snapshot.room.round_count}
-              submittedPromptCount={submittedPromptCount}
-            />
+            myPrompt ? (
+              <SubmissionWaitingStage
+                phaseLabel="Prompt"
+                submittedCount={submittedPromptCount}
+                totalCount={snapshot.players.length}
+              />
+            ) : (
+              <PromptingStage
+                busy={Boolean(busyAction)}
+                deadlineAt={snapshot.room.phase_deadline_at}
+                onPromptTextChange={setPromptText}
+                onSubmitPrompt={() =>
+                  runAction("prompt", async () => {
+                    await submitPrompt(snapshot.room.id, me.id, promptText);
+                  })
+                }
+                playerCount={snapshot.players.length}
+                promptText={promptText}
+                currentRoundNumber={roundCursor.roundIndex + 1}
+                roundCount={snapshot.room.round_count}
+                submittedPromptCount={submittedPromptCount}
+              />
+            )
           ) : null}
 
           {snapshot.room.phase === "answering" && currentPrompt ? (
-            <AnsweringStage
-              answer={myConfession?.answer}
-              busy={Boolean(busyAction)}
-              confessionCount={round?.confessionCount ?? 0}
-              deadlineAt={snapshot.room.phase_deadline_at}
-              expectedConfessions={round?.expectedConfessions ?? 0}
-              onSubmit={(value) =>
-                runAction("answer", async () => {
-                  await submitConfession(snapshot.room.id, currentPrompt.id, me.id, value);
-                  await maybeAdvanceRoom(snapshot.room.id);
-                })
-              }
-              prompt={currentPrompt.text}
-            />
+            myConfession ? (
+              <SubmissionWaitingStage
+                phaseLabel="Confessional"
+                submittedCount={round?.confessionCount ?? 0}
+                totalCount={round?.expectedConfessions ?? 0}
+              />
+            ) : (
+              <AnsweringStage
+                answer={myConfessionAnswer}
+                busy={Boolean(busyAction)}
+                confessionCount={round?.confessionCount ?? 0}
+                deadlineAt={snapshot.room.phase_deadline_at}
+                expectedConfessions={round?.expectedConfessions ?? 0}
+                onSubmit={(value) =>
+                  runAction("answer", async () => {
+                    await submitConfession(snapshot.room.id, currentPrompt.id, me.id, value);
+                    await maybeAdvanceRoom(snapshot.room.id);
+                  })
+                }
+                prompt={currentPrompt.text}
+              />
+            )
           ) : null}
 
           {snapshot.room.phase === "guessing" && currentPrompt ? (
-            <GuessingStage
-              key={`${currentPrompt.id}:${myGuessSignature}`}
-              busy={Boolean(busyAction)}
-              deadlineAt={snapshot.room.phase_deadline_at}
-              myGuesses={myGuessByTarget}
-              onSubmit={(selectedTargetIds) =>
-                runAction("guess", async () => {
-                  const selectedSet = new Set(selectedTargetIds);
-                  const guessTargets = sortedPlayers.filter((player) => player.id !== me.id);
-                  await Promise.all(
-                    guessTargets.map((target) =>
-                      submitGuess(
-                        snapshot.room.id,
-                        currentPrompt.id,
-                        me.id,
-                        target.id,
-                        selectedSet.has(target.id),
-                      ),
-                    ),
-                  );
-                  await maybeAdvanceRoom(snapshot.room.id);
-                })
-              }
-              prompt={currentPrompt.text}
-              submittedPlayerCount={submittedGuessPlayerCount}
-              targets={sortedPlayers.filter((player) => player.id !== me.id)}
-              totalPlayerCount={sortedPlayers.length}
-            />
+            !isConfessionParticipant || myGuessesSubmitted || isGuessSubmitting ? (
+              <SubmissionWaitingStage
+                phaseLabel="Accusations"
+                submittedCount={Math.min(
+                  waitingGuessSubmittedCount,
+                  confessionParticipants.length,
+                )}
+                totalCount={confessionParticipants.length}
+              />
+            ) : (
+              <GuessingStage
+                key={`${currentPrompt.id}:${myGuessSignature}`}
+                busy={Boolean(busyAction)}
+                deadlineAt={snapshot.room.phase_deadline_at}
+                myGuesses={myGuessByTarget}
+                onSubmit={(selectedTargetIds) =>
+                  runAction("guess", async () => {
+                    const selectedSet = new Set(selectedTargetIds);
+                    const guessTargets = confessionParticipants.filter(
+                      (player) => player.id !== me.id,
+                    );
+                    await submitGuesses(
+                      snapshot.room.id,
+                      currentPrompt.id,
+                      me.id,
+                      guessTargets.map((target) => ({
+                        targetPlayerId: target.id,
+                        guessedAnswer: selectedSet.has(target.id),
+                      })),
+                    );
+                    await maybeAdvanceRoom(snapshot.room.id);
+                  })
+                }
+                prompt={currentPrompt.text}
+                submittedPlayerCount={submittedGuessPlayerCount}
+                targets={confessionParticipants.filter((player) => player.id !== me.id)}
+                totalPlayerCount={confessionParticipants.length}
+              />
+            )
           ) : null}
 
           {snapshot.room.phase === "revealing" && currentPrompt && revealTarget ? (
             <RevealingStage
+              key={`${currentPrompt.id}:${revealTarget.id}`}
               busy={Boolean(busyAction)}
               canControl={canRevealControl}
               deadlineAt={snapshot.room.phase_deadline_at}
@@ -733,13 +789,9 @@ export function RoomClient({ code }: RoomClientProps) {
                   await advanceReveal(snapshot.room.id, me.id);
                 })
               }
-              onReveal={() =>
-                runAction("reveal", async () => {
-                  await revealCurrentPlayer(snapshot.room.id, me.id);
-                })
-              }
               prompt={currentPrompt.text}
               target={{
+                id: revealTarget.id,
                 name: revealTarget.name,
                 color: revealTarget.color,
                 emoji: revealTarget.emoji,
@@ -751,7 +803,14 @@ export function RoomClient({ code }: RoomClientProps) {
 
           {snapshot.room.phase === "revealing" && currentPrompt && !revealTarget ? (
             <RevealSummaryStage
+              busy={Boolean(busyAction)}
+              canAdvance={me.is_host}
               deadlineAt={snapshot.room.phase_deadline_at}
+              onNext={() =>
+                runAction("next-reveal-summary", async () => {
+                  await advanceReveal(snapshot.room.id, me.id);
+                })
+              }
               prompt={currentPrompt.text}
               truthRows={revealTruthRows}
             />
@@ -816,6 +875,7 @@ export function RoomClient({ code }: RoomClientProps) {
             values={settingsDraft}
           />
         ) : null}
+
       </div>
     </main>
   );

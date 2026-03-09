@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { StageMetaBar } from "@/components/room/stage-meta-bar";
 
 type AnsweringStageProps = {
@@ -35,10 +35,39 @@ export function AnsweringStage({
   onSubmit,
 }: AnsweringStageProps) {
   const [draftAnswer, setDraftAnswer] = useState<boolean | undefined>(answer);
+  const autoSubmittedRef = useRef(false);
 
   useEffect(() => {
     setDraftAnswer(answer);
   }, [answer]);
+
+  useEffect(() => {
+    autoSubmittedRef.current = false;
+  }, [deadlineAt]);
+
+  useEffect(() => {
+    if (!deadlineAt || autoSubmittedRef.current) {
+      return;
+    }
+
+    const triggerAutoSubmit = () => {
+      if (autoSubmittedRef.current || busy) {
+        return;
+      }
+
+      autoSubmittedRef.current = true;
+      void onSubmit(typeof draftAnswer === "boolean" ? draftAnswer : false);
+    };
+
+    const remainingMs = new Date(deadlineAt).getTime() - Date.now();
+    if (remainingMs <= 0) {
+      triggerAutoSubmit();
+      return;
+    }
+
+    const timeout = window.setTimeout(triggerAutoSubmit, remainingMs + 50);
+    return () => window.clearTimeout(timeout);
+  }, [busy, deadlineAt, draftAnswer, onSubmit]);
 
   return (
     <section className="card-enter -mx-[var(--card-padding)] flex min-h-0 min-w-0 flex-1 flex-col px-[var(--card-padding)] pb-5 pt-2">
