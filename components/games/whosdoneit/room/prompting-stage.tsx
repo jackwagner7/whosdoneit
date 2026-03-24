@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef } from "react";
-import { StageMetaBar } from "@/components/room/stage-meta-bar";
+import { StageMetaBar } from "@/components/games/whosdoneit/room/stage-meta-bar";
 
 const QUICK_PROMPT_POOL = [
   "Have you ever ghosted a group chat?",

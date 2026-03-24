@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { PlayerBox } from "@/components/player-box";
-import { StageMetaBar } from "@/components/room/stage-meta-bar";
-import type { Player } from "@/types/games";
+import { StageMetaBar } from "@/components/games/whosdoneit/room/stage-meta-bar";
+import type { Player } from "@/types/whosdoneit";
 
 type GuessingStageProps = {
   prompt: string;

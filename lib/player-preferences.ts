@@ -14,9 +14,19 @@ const PLAYER_COLOR_SET: Set<string> = new Set<string>(
 );
 const PLAYER_EMOJI_SET: Set<string> = new Set<string>(PLAYER_EMOJI_POOL);
 
+const DEFAULT_PLAYER_PREFERENCES: PlayerProfile = {
+  name: "",
+  color: DEFAULT_PLAYER_COLOR,
+  emoji: DEFAULT_PLAYER_EMOJI,
+};
+
+export function getDefaultPlayerPreferences(): PlayerProfile {
+  return { ...DEFAULT_PLAYER_PREFERENCES };
+}
+
 export function getStoredPlayerPreferences(): PlayerProfile {
   if (typeof window === "undefined") {
-    return { name: "", color: DEFAULT_PLAYER_COLOR, emoji: DEFAULT_PLAYER_EMOJI };
+    return getDefaultPlayerPreferences();
   }
 
   const name = localStorage.getItem(PLAYER_NAME_KEY) ?? "";

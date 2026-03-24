@@ -3,49 +3,57 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { EntryProfileForm } from "@/components/entry-profile-form";
+import { getGameBySlug } from "@/lib/game-catalog";
+import { createRoom } from "@/lib/games/whosdoneit/game";
+import {
+  getDefaultHostSettings,
+  getStoredHostSettings,
+} from "@/lib/games/whosdoneit/host-settings-preferences";
 import {
   getDefaultPlayerPreferences,
   getStoredPlayerPreferences,
+  setStoredPlayerPreferences,
 } from "@/lib/player-preferences";
-import { joinRoomByCode } from "@/lib/room-directory";
-import { SITE_NAME } from "@/lib/site-config";
 
-export default function JoinPage() {
+const GAME = getGameBySlug("whosdoneit");
+
+export function WhosDoneItCreateRoomScreen() {
   const [defaults, setDefaults] = useState(() => getDefaultPlayerPreferences());
+  const [hostSettings, setHostSettings] = useState(() => getDefaultHostSettings());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
   useEffect(() => {
     setDefaults(getStoredPlayerPreferences());
+    setHostSettings(getStoredHostSettings());
   }, []);
 
-  async function handleJoin(values: {
-    code: string;
+  async function handleCreateRoom(values: {
     name: string;
     color: string;
     emoji: string;
   }) {
-    const code = values.code.trim().toUpperCase();
-    if (!code || !values.name.trim()) {
-      return;
-    }
-
+    if (!values.name.trim()) return;
     setLoading(true);
     setError(null);
     try {
-      const { room, player } = await joinRoomByCode(
-        code,
-        values.name,
-        values.color,
-        values.emoji,
-      );
+      const { room, player } = await createRoom(values.name.trim(), {
+        playerColor: values.color,
+        playerEmoji: values.emoji,
+        settings: hostSettings,
+      });
+      setStoredPlayerPreferences({
+        name: player.name,
+        color: player.color,
+        emoji: player.emoji,
+      });
       localStorage.setItem("playerId", player.id);
       localStorage.setItem(`playerId:${room.code}`, player.id);
       router.push(`/room/${room.code}`);
     } catch (issue) {
       console.error(issue);
-      setError(issue instanceof Error ? issue.message : "Failed to join room");
+      setError(issue instanceof Error ? issue.message : "Failed to create room");
     } finally {
       setLoading(false);
     }
@@ -54,17 +62,15 @@ export default function JoinPage() {
   return (
     <main className="app-page">
       <EntryProfileForm
-        bannerLabel={SITE_NAME}
+        bannerLabel={GAME?.name}
         error={error}
-        initialCode=""
         initialColor={defaults.color}
         initialEmoji={defaults.emoji}
         initialName={defaults.name}
         loading={loading}
-        onSubmit={handleJoin}
-        showCodeInput
-        submitLabel="Join"
-        title="Join Room"
+        onSubmit={handleCreateRoom}
+        submitLabel="Create"
+        title={`Create ${GAME?.shortName ?? "Game"} Room`}
       />
     </main>
   );

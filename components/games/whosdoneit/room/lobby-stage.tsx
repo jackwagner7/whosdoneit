@@ -1,7 +1,7 @@
 "use client";
 
 import { PlayerBox } from "@/components/player-box";
-import type { Player } from "@/types/games";
+import type { Player } from "@/types/whosdoneit";
 
 type LobbyStageProps = {
   players: Player[];

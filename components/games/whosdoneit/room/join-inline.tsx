@@ -9,7 +9,7 @@ import {
   DEFAULT_PLAYER_COLOR,
   DEFAULT_PLAYER_EMOJI,
   refreshEmojiChoices,
-} from "@/lib/game";
+} from "@/lib/games/whosdoneit/game";
 
 type JoinInlineProps = {
   code: string;

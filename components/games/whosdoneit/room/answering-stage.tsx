@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { StageMetaBar } from "@/components/room/stage-meta-bar";
+import { StageMetaBar } from "@/components/games/whosdoneit/room/stage-meta-bar";
 
 type AnsweringStageProps = {
   prompt: string;

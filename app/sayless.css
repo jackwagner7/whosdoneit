@@ -1,0 +1,68 @@
+.sayless-team-grid {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.sayless-team-panel {
+  border: 2px solid var(--team-color);
+  border-radius: 1.5rem;
+  background: var(--team-bg);
+  padding: 1rem;
+  text-align: left;
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+
+.sayless-team-panel:disabled {
+  opacity: 0.7;
+}
+
+.sayless-team-panel:not(:disabled):hover {
+  transform: translateY(-1px);
+}
+
+.sayless-team-panel-active {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--team-color) 20%, white);
+}
+
+.sayless-team-title {
+  color: var(--team-color);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.sayless-team-name {
+  margin-top: 0.2rem;
+  font-size: 1.15rem;
+  font-weight: 900;
+  color: #0f172a;
+}
+
+.sayless-team-color {
+  margin-top: 0.15rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #475569;
+}
+
+.sayless-team-count {
+  min-width: 2.25rem;
+  border-radius: 9999px;
+  background: #ffffff;
+  color: var(--team-color);
+  padding: 0.25rem 0.6rem;
+  text-align: center;
+  font-size: 0.85rem;
+  font-weight: 900;
+}
+
+.sayless-team-action {
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--team-color);
+}

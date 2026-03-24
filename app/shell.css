@@ -71,30 +71,6 @@
   max-width: 100%;
 }
 
-.player-box-selected-guilty {
-  border-color: #dc2626;
-  background: #fff1f2;
-  box-shadow: 0 0 0 2px #fecdd3;
-}
-
-.player-box-trial-correct-innocent {
-  border-width: 2px;
-  border-color: #0ea5e9;
-  background: #dbeafe;
-  box-shadow: 0 0 0 3px #bae6fd;
-}
-
-.player-box-trial-correct-guilty {
-  border-width: 2px;
-  border-color: #e11d48;
-  background: #ffe4e6;
-  box-shadow: 0 0 0 3px #fecdd3;
-}
-
-.player-box-trial-wrong {
-  opacity: 0.55;
-}
-
 .player-box-label {
   font-size: 0.7rem;
   font-weight: 700;
@@ -133,20 +109,6 @@
   vertical-align: baseline;
 }
 
-.stage-heading {
-  font-size: 0.75rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.22em;
-  color: #64748b;
-}
-
-.stage-subheading {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: #475569;
-}
-
 .settings-number-input {
   appearance: textfield;
   -moz-appearance: textfield;
@@ -159,28 +121,6 @@
   appearance: none;
   -webkit-appearance: none;
   margin: 0;
-}
-
-.guess-chip {
-  position: absolute;
-  right: -0.35rem;
-  top: -0.35rem;
-  border-radius: 9999px;
-  border: 1px solid #cbd5e1;
-  background: #ffffff;
-  padding: 0.05rem 0.4rem;
-  font-size: 0.68rem;
-  font-weight: 800;
-}
-
-.guess-chip-correct {
-  border-color: #10b981;
-  color: #047857;
-}
-
-.guess-chip-wrong {
-  border-color: #ef4444;
-  color: #b91c1c;
 }
 
 @media (min-width: 640px) {

@@ -1,4 +1,4 @@
-import { RoomClient } from "@/components/room-client";
+import { RoomRouterClient } from "@/components/room-router-client";
 
 type Props = {
   params: Promise<{ code: string }>;
@@ -6,5 +6,5 @@ type Props = {
 
 export default async function RoomPage({ params }: Props) {
   const { code } = await params;
-  return <RoomClient code={code} />;
+  return <RoomRouterClient code={code} />;
 }

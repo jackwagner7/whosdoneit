@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AppBanner } from "@/components/app-banner";
 import { PlayerColorPicker } from "@/components/player-color-picker";
 import { PlayerEmojiPicker } from "@/components/player-emoji-picker";
@@ -14,26 +14,36 @@ import {
   refreshEmojiChoices,
 } from "@/lib/game";
 import {
+  getDefaultPlayerPreferences,
   getStoredPlayerPreferences,
   setStoredPlayerPreferences,
 } from "@/lib/player-preferences";
 
 export default function SettingsPage() {
-  const [defaults] = useState(() => getStoredPlayerPreferences());
-  const [name, setName] = useState(() => defaults.name);
-  const [color, setColor] = useState(
-    () => defaults.color || DEFAULT_PLAYER_COLOR,
-  );
-  const [emoji, setEmoji] = useState(
-    () => defaults.emoji || DEFAULT_PLAYER_EMOJI,
-  );
+  const [defaults, setDefaults] = useState(() => getDefaultPlayerPreferences());
+  const [name, setName] = useState<string>("");
+  const [color, setColor] = useState<string>(DEFAULT_PLAYER_COLOR);
+  const [emoji, setEmoji] = useState<string>(DEFAULT_PLAYER_EMOJI);
   const [colorOptions, setColorOptions] = useState(() =>
-    buildColorChoices({ selectedColor: defaults.color }),
+    buildColorChoices({ selectedColor: DEFAULT_PLAYER_COLOR }),
   );
   const [emojiOptions, setEmojiOptions] = useState(() =>
-    buildEmojiChoices({ selectedEmoji: defaults.emoji }),
+    buildEmojiChoices({ selectedEmoji: DEFAULT_PLAYER_EMOJI }),
   );
   const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    const stored = getStoredPlayerPreferences();
+    setDefaults(stored);
+  }, []);
+
+  useEffect(() => {
+    setName(defaults.name);
+    setColor(defaults.color || DEFAULT_PLAYER_COLOR);
+    setEmoji(defaults.emoji || DEFAULT_PLAYER_EMOJI);
+    setColorOptions(buildColorChoices({ selectedColor: defaults.color }));
+    setEmojiOptions(buildEmojiChoices({ selectedEmoji: defaults.emoji }));
+  }, [defaults]);
 
   function refreshColors() {
     setColorOptions((previousChoices = []) => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AppBanner } from "@/components/app-banner";
 import { PlayerColorPicker } from "@/components/player-color-picker";
 import { PlayerEmojiPicker } from "@/components/player-emoji-picker";
@@ -13,6 +13,7 @@ import {
 } from "@/lib/game";
 
 type EntryProfileFormProps = {
+  bannerLabel?: string;
   title: string;
   submitLabel: string;
   showCodeInput?: boolean;
@@ -58,6 +59,7 @@ function buildInitialEmojiState(initialEmoji: string): PickerState {
 }
 
 export function EntryProfileForm({
+  bannerLabel,
   title,
   submitLabel,
   showCodeInput = false,
@@ -78,6 +80,22 @@ export function EntryProfileForm({
   const [emojiState, setEmojiState] = useState<PickerState>(() =>
     buildInitialEmojiState(initialEmoji),
   );
+
+  useEffect(() => {
+    setCode(initialCode.toUpperCase());
+  }, [initialCode]);
+
+  useEffect(() => {
+    setName(initialName);
+  }, [initialName]);
+
+  useEffect(() => {
+    setColorState(buildInitialColorState(initialColor));
+  }, [initialColor]);
+
+  useEffect(() => {
+    setEmojiState(buildInitialEmojiState(initialEmoji));
+  }, [initialEmoji]);
 
   function refreshColors() {
     setColorState((previous) => {
@@ -117,7 +135,7 @@ export function EntryProfileForm({
 
   return (
     <div className="app-page-card app-page-card-wide app-page-card-mobile-fill flex flex-col">
-      <AppBanner />
+      <AppBanner label={bannerLabel} />
 
       <div className="flex-1 grid content-center gap-4 pt-4">
         <div>

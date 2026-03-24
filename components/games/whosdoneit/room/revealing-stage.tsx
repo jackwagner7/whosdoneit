@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { PlayerBox } from "@/components/player-box";
-import { CountdownBadge } from "@/components/room/countdown-badge";
+import { CountdownBadge } from "@/components/games/whosdoneit/room/countdown-badge";
 
 const REVEAL_WAIT_MS = {
   quick: 240,

@@ -1,7 +1,7 @@
 "use client";
 
 import { PlayerBox } from "@/components/player-box";
-import { CountdownBadge } from "@/components/room/countdown-badge";
+import { CountdownBadge } from "@/components/games/whosdoneit/room/countdown-badge";
 
 type RevealTruthRow = {
   id: string;

@@ -1,6 +1,6 @@
 "use client";
 
-import { CountdownBadge } from "@/components/room/countdown-badge";
+import { CountdownBadge } from "@/components/games/whosdoneit/room/countdown-badge";
 
 type StageMetaBarProps = {
   title: string;

@@ -3,18 +3,18 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppBanner } from "@/components/app-banner";
-import { AnsweringStage } from "@/components/room/answering-stage";
+import { AnsweringStage } from "@/components/games/whosdoneit/room/answering-stage";
 import { EntryProfileForm } from "@/components/entry-profile-form";
-import { FinishedStage } from "@/components/room/finished-stage";
-import { GuessingStage } from "@/components/room/guessing-stage";
-import { LeaderboardStage } from "@/components/room/leaderboard-stage";
-import { LobbyStage } from "@/components/room/lobby-stage";
-import { ProfileSettingsSheet } from "@/components/room/profile-settings-sheet";
-import { PromptingStage } from "@/components/room/prompting-stage";
-import { RevealSummaryStage } from "@/components/room/reveal-summary-stage";
-import { RevealingStage } from "@/components/room/revealing-stage";
-import { SettingsSheet } from "@/components/room/settings-sheet";
-import { SubmissionWaitingStage } from "@/components/room/submission-waiting-stage";
+import { FinishedStage } from "@/components/games/whosdoneit/room/finished-stage";
+import { GuessingStage } from "@/components/games/whosdoneit/room/guessing-stage";
+import { LeaderboardStage } from "@/components/games/whosdoneit/room/leaderboard-stage";
+import { LobbyStage } from "@/components/games/whosdoneit/room/lobby-stage";
+import { ProfileSettingsSheet } from "@/components/games/whosdoneit/room/profile-settings-sheet";
+import { PromptingStage } from "@/components/games/whosdoneit/room/prompting-stage";
+import { RevealSummaryStage } from "@/components/games/whosdoneit/room/reveal-summary-stage";
+import { RevealingStage } from "@/components/games/whosdoneit/room/revealing-stage";
+import { SettingsSheet } from "@/components/games/whosdoneit/room/settings-sheet";
+import { SubmissionWaitingStage } from "@/components/games/whosdoneit/room/submission-waiting-stage";
 import {
   addFakePlayers,
   advanceReveal,
@@ -39,13 +39,15 @@ import {
   subscribeToRoom,
   updatePlayerProfile,
   updateRoomSettings,
-} from "@/lib/game";
-import { setStoredHostSettings } from "@/lib/host-settings-preferences";
+} from "@/lib/games/whosdoneit/game";
+import { setStoredHostSettings } from "@/lib/games/whosdoneit/host-settings-preferences";
+import { getDefaultHostSettings } from "@/lib/games/whosdoneit/host-settings-preferences";
 import {
+  getDefaultPlayerPreferences,
   getStoredPlayerPreferences,
   setStoredPlayerPreferences,
 } from "@/lib/player-preferences";
-import type { GameSnapshot, Player } from "@/types/games";
+import type { GameSnapshot, Player } from "@/types/whosdoneit";
 
 type RoomClientProps = {
   code: string;
@@ -91,7 +93,7 @@ export function RoomClient({ code }: RoomClientProps) {
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
-  const [joinDefaults] = useState(() => getStoredPlayerPreferences());
+  const [joinDefaults, setJoinDefaults] = useState(() => getDefaultPlayerPreferences());
   const [profileDraft, setProfileDraft] = useState<ProfileDraft>({
     name: joinDefaults.name,
     color: joinDefaults.color || DEFAULT_PLAYER_COLOR,
@@ -108,12 +110,7 @@ export function RoomClient({ code }: RoomClientProps) {
     }),
   );
   const [settingsDraft, setSettingsDraft] = useState<SettingsDraft>({
-    promptSeconds: 20,
-    roundCount: 1,
-    answeringSeconds: 25,
-    guessingSeconds: 35,
-    revealSeconds: 8,
-    fastMode: false,
+    ...getDefaultHostSettings(),
   });
 
   const loadSnapshot = useCallback(
@@ -142,6 +139,7 @@ export function RoomClient({ code }: RoomClientProps) {
       localStorage.getItem(`playerId:${normalizedCode}`) ??
       localStorage.getItem("playerId");
     setPlayerId(storedPlayerId);
+    setJoinDefaults(getStoredPlayerPreferences());
     void loadSnapshot(true);
   }, [loadSnapshot, normalizedCode]);
 
