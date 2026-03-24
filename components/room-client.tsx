@@ -820,6 +820,7 @@ export function RoomClient({ code }: RoomClientProps) {
             <LeaderboardStage
               busy={Boolean(busyAction)}
               hasNextRound={hasNextRound}
+              isHost={me.is_host}
               myPlayerId={me.id}
               questionNumber={questionNumber}
               onContinue={() =>

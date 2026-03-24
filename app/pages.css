@@ -17,7 +17,7 @@
 }
 
 .app-page-card-wide {
-  max-width: 36rem;
+  max-width: 40rem;
 }
 
 .app-page-card-mobile-fill {
@@ -145,6 +145,20 @@
   font-size: 0.875rem;
   font-weight: 600;
   color: #475569;
+}
+
+.settings-number-input {
+  appearance: textfield;
+  -moz-appearance: textfield;
+  padding-right: 1rem;
+  line-height: 1.75;
+}
+
+.settings-number-input::-webkit-outer-spin-button,
+.settings-number-input::-webkit-inner-spin-button {
+  appearance: none;
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 .guess-chip {

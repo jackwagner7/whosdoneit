@@ -10,6 +10,7 @@ type LeaderboardStageProps = {
   questionNumber: number;
   totalQuestions: number;
   busy: boolean;
+  isHost: boolean;
   onContinue: () => Promise<void>;
 };
 
@@ -63,6 +64,7 @@ export function LeaderboardStage({
   questionNumber,
   totalQuestions,
   busy,
+  isHost,
   onContinue,
 }: LeaderboardStageProps) {
   const placementRows = buildPlacementRows(players);
@@ -107,16 +109,22 @@ export function LeaderboardStage({
             </li>
           ))}
         </ol>
-      </div>
-      <div className="mt-3 shrink-0 border-t border-slate-200 pt-3">
-        <button
-          className="w-full rounded-2xl bg-black px-4 py-3 text-xl font-bold text-white disabled:opacity-60"
-          disabled={busy}
-          onClick={() => void onContinue()}
-          type="button"
-        >
-          {busy ? "..." : hasNextRound ? "Next" : "Final standings"}
-        </button>
+      {isHost ? (
+        <div className="mt-3 shrink-0 border-t border-slate-200 pt-3">
+          <button
+            className="w-full rounded-2xl bg-black px-4 py-3 text-xl font-bold text-white disabled:opacity-60"
+            disabled={busy}
+            onClick={() => void onContinue()}
+            type="button"
+          >
+            {busy ? "..." : hasNextRound ? "Next" : "Final standings"}
+          </button>
+        </div>
+      ) : (
+        <p className="stage-subheading mt-3 shrink-0 border-t border-slate-200 pt-3 text-center">
+          Waiting for host
+        </p>
+      )}
       </div>
     </section>
   );
