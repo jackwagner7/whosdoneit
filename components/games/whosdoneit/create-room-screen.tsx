@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { EntryProfileForm } from "@/components/entry-profile-form";
 import { getGameBySlug } from "@/lib/game-catalog";
@@ -11,6 +11,7 @@ import {
 } from "@/lib/games/whosdoneit/host-settings-preferences";
 import {
   getDefaultPlayerPreferences,
+  hasStoredPlayerPreferences,
   getStoredPlayerPreferences,
   setStoredPlayerPreferences,
 } from "@/lib/player-preferences";
@@ -22,56 +23,108 @@ export function WhosDoneItCreateRoomScreen() {
   const [hostSettings, setHostSettings] = useState(() => getDefaultHostSettings());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [needsProfile, setNeedsProfile] = useState<boolean | null>(null);
+  const attemptedAutoCreateRef = useRef(false);
   const router = useRouter();
 
-  useEffect(() => {
-    setDefaults(getStoredPlayerPreferences());
-    setHostSettings(getStoredHostSettings());
-  }, []);
+  const handleCreateRoom = useCallback(
+    async (values: {
+      name: string;
+      color: string;
+      emoji: string;
+    }) => {
+      if (!values.name.trim()) return;
+      setLoading(true);
+      setError(null);
+      try {
+        const { room, player } = await createRoom(values.name.trim(), {
+          playerColor: values.color,
+          playerEmoji: values.emoji,
+          settings: hostSettings,
+        });
+        setStoredPlayerPreferences({
+          name: player.name,
+          color: player.color,
+          emoji: player.emoji,
+        });
+        localStorage.setItem("playerId", player.id);
+        localStorage.setItem(`playerId:${room.code}`, player.id);
+        router.push(`/room/${room.code}`);
+      } catch (issue) {
+        console.error(issue);
+        setError(issue instanceof Error ? issue.message : "Failed to create room");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [hostSettings, router],
+  );
 
-  async function handleCreateRoom(values: {
-    name: string;
-    color: string;
-    emoji: string;
-  }) {
-    if (!values.name.trim()) return;
+  useEffect(() => {
+    const storedPreferences = getStoredPlayerPreferences();
+    const storedHostSettings = getStoredHostSettings();
+    setDefaults(storedPreferences);
+    setHostSettings(storedHostSettings);
+
+    if (!hasStoredPlayerPreferences()) {
+      setNeedsProfile(true);
+      return;
+    }
+
+    if (attemptedAutoCreateRef.current) {
+      return;
+    }
+
+    attemptedAutoCreateRef.current = true;
     setLoading(true);
     setError(null);
-    try {
-      const { room, player } = await createRoom(values.name.trim(), {
-        playerColor: values.color,
-        playerEmoji: values.emoji,
-        settings: hostSettings,
+
+    void createRoom(storedPreferences.name.trim(), {
+      playerColor: storedPreferences.color,
+      playerEmoji: storedPreferences.emoji,
+      settings: storedHostSettings,
+    })
+      .then(({ room, player }) => {
+        setStoredPlayerPreferences({
+          name: player.name,
+          color: player.color,
+          emoji: player.emoji,
+        });
+        localStorage.setItem("playerId", player.id);
+        localStorage.setItem(`playerId:${room.code}`, player.id);
+        router.push(`/room/${room.code}`);
+      })
+      .catch((issue) => {
+        console.error(issue);
+        setError(issue instanceof Error ? issue.message : "Failed to create room");
+        setNeedsProfile(true);
+      })
+      .finally(() => {
+        setLoading(false);
       });
-      setStoredPlayerPreferences({
-        name: player.name,
-        color: player.color,
-        emoji: player.emoji,
-      });
-      localStorage.setItem("playerId", player.id);
-      localStorage.setItem(`playerId:${room.code}`, player.id);
-      router.push(`/room/${room.code}`);
-    } catch (issue) {
-      console.error(issue);
-      setError(issue instanceof Error ? issue.message : "Failed to create room");
-    } finally {
-      setLoading(false);
-    }
-  }
+  }, [router]);
 
   return (
     <main className="app-page">
-      <EntryProfileForm
-        bannerLabel={GAME?.name}
-        error={error}
-        initialColor={defaults.color}
-        initialEmoji={defaults.emoji}
-        initialName={defaults.name}
-        loading={loading}
-        onSubmit={handleCreateRoom}
-        submitLabel="Create"
-        title={`Create ${GAME?.shortName ?? "Game"} Room`}
-      />
+      {needsProfile === true ? (
+        <EntryProfileForm
+          bannerLabel={GAME?.name}
+          error={error}
+          initialColor={defaults.color}
+          initialEmoji={defaults.emoji}
+          initialName={defaults.name}
+          loading={loading}
+          onSubmit={handleCreateRoom}
+          submitLabel="Create"
+          title={`Create ${GAME?.shortName ?? "Game"} Room`}
+        />
+      ) : (
+        <div className="app-page-card app-page-card-wide app-page-card-mobile-fill flex flex-col">
+          <p className="m-auto text-center text-lg font-bold text-slate-700">
+            {needsProfile === null ? "Loading..." : "Creating your room..."}
+          </p>
+        </div>
+      )}
     </main>
   );
 }

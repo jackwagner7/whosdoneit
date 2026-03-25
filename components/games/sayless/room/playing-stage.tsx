@@ -56,7 +56,7 @@ export function PlayingStage({
   }, [deadlineAt]);
 
   return (
-    <section className="card-enter relative flex min-h-0 flex-1 flex-col overflow-y-auto pb-4">
+    <section className="relative flex min-h-0 flex-1 flex-col overflow-y-auto pb-4">
       <header className="shrink-0">
         <div className="flex items-start justify-between gap-3">
           <div>

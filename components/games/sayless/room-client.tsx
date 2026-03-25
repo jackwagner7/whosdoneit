@@ -10,6 +10,7 @@ import { PlayingStage } from "@/components/games/sayless/room/playing-stage";
 import { RoundSummaryStage } from "@/components/games/sayless/room/round-summary-stage";
 import { SettingsSheet } from "@/components/games/sayless/room/settings-sheet";
 import { ProfileSettingsSheet } from "@/components/games/whosdoneit/room/profile-settings-sheet";
+import { getGameBySlug } from "@/lib/game-catalog";
 import {
   continueFromRoundSummary,
   getDraftCardForPlayer,
@@ -48,12 +49,17 @@ import {
 import {
   getDefaultPlayerPreferences,
   getStoredPlayerPreferences,
+  hasStoredPlayerPreferences,
   setStoredPlayerPreferences,
 } from "@/lib/player-preferences";
+import { ROOM_LOADING_LABEL } from "@/lib/site-config";
 import type { SayLessCard, SayLessRoomSettings, SayLessSnapshot } from "@/types/sayless";
+
+const GAME = getGameBySlug("sayless");
 
 type RoomClientProps = {
   code: string;
+  initialSnapshot?: SayLessSnapshot | null;
 };
 
 type ProfileDraft = {
@@ -156,14 +162,15 @@ function buildTeamSummaries(snapshot: SayLessSnapshot) {
   });
 }
 
-export function SayLessRoomClient({ code }: RoomClientProps) {
+export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientProps) {
   const normalizedCode = code.toUpperCase();
   const [playerId, setPlayerId] = useState<string | null>(null);
-  const [snapshot, setSnapshot] = useState<SayLessSnapshot | null>(null);
+  const [snapshot, setSnapshot] = useState<SayLessSnapshot | null>(initialSnapshot);
   const [draftCard, setDraftCard] = useState<SayLessCard | null>(null);
   const [draftCardLoading, setDraftCardLoading] = useState(false);
   const [draftRefreshKey, setDraftRefreshKey] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(initialSnapshot === null);
+  const [readyForJoinGate, setReadyForJoinGate] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [joinLoading, setJoinLoading] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
@@ -201,6 +208,7 @@ export function SayLessRoomClient({ code }: RoomClientProps) {
   );
   const refreshTimeoutRef = useRef<number | null>(null);
   const turnActionQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const attemptedAutoJoinRef = useRef(false);
   const optimisticTurnStateRef = useRef({
     cardId: null as string | null,
     passedIds: [] as string[],
@@ -235,8 +243,15 @@ export function SayLessRoomClient({ code }: RoomClientProps) {
     setPlayerId(storedPlayerId);
     setJoinDefaults(getStoredPlayerPreferences());
     setSettingsDraft(getStoredHostSettings());
+    setReadyForJoinGate(true);
+    if (initialSnapshot) {
+      setSnapshot(initialSnapshot);
+      setLoading(false);
+      return;
+    }
+
     void loadSnapshot(true);
-  }, [loadSnapshot, normalizedCode]);
+  }, [initialSnapshot, loadSnapshot, normalizedCode]);
 
   useEffect(() => {
     if (!snapshot?.room.id) {
@@ -430,7 +445,15 @@ export function SayLessRoomClient({ code }: RoomClientProps) {
       return;
     }
 
-    if (!busyAction && pendingTurnActions === 0) {
+    const serverCardId = snapshot.state.active_card_entry_id ?? null;
+    const optimisticCardId = optimisticTurnStateRef.current.cardId;
+    const serverCaughtUp =
+      optimisticCardId === null ||
+      serverCardId === optimisticCardId ||
+      serverCardId === null ||
+      snapshot.state.active_player_id !== me.id;
+
+    if (!busyAction && pendingTurnActions === 0 && serverCaughtUp) {
       clearOptimisticTurn();
     }
   }, [
@@ -477,6 +500,29 @@ export function SayLessRoomClient({ code }: RoomClientProps) {
     },
     [loadSnapshot],
   );
+
+  useEffect(() => {
+    if (loading || error || !snapshot || me || joinLoading) {
+      return;
+    }
+
+    if (attemptedAutoJoinRef.current || !hasStoredPlayerPreferences()) {
+      return;
+    }
+
+    const storedPreferences = getStoredPlayerPreferences();
+    if (!storedPreferences.name.trim()) {
+      return;
+    }
+
+    attemptedAutoJoinRef.current = true;
+    void handleInlineJoin({
+      code: snapshot.room.code,
+      name: storedPreferences.name,
+      color: storedPreferences.color,
+      emoji: storedPreferences.emoji,
+    });
+  }, [error, handleInlineJoin, joinLoading, loading, me, snapshot]);
 
   const handleSaveSettings = useCallback(async () => {
     if (!snapshot || !me) {
@@ -664,10 +710,16 @@ export function SayLessRoomClient({ code }: RoomClientProps) {
   if (loading) {
     return (
       <main className="app-page">
-        <div className="app-page-card app-page-card-mobile-fill flex flex-col">
-          <AppBanner label="Say Less" />
+        <div className="app-page-card app-page-card-wide app-page-card-mobile-fill h-[calc(100svh-1.5rem)] max-h-[calc(100svh-1.5rem)] sm:h-[80vh] sm:max-h-[80vh] flex flex-col overflow-hidden">
+          <AppBanner label={ROOM_LOADING_LABEL} />
           <div className="flex flex-1 items-center justify-center">
-            <p className="text-sm font-semibold text-slate-600">Loading room...</p>
+            <div className="grid justify-items-center gap-3">
+              <div
+                aria-hidden="true"
+                className="h-12 w-12 animate-spin rounded-full border-4 border-slate-300 border-t-black"
+              />
+              <p className="text-sm font-semibold text-slate-600">Loading room...</p>
+            </div>
           </div>
         </div>
       </main>
@@ -677,8 +729,8 @@ export function SayLessRoomClient({ code }: RoomClientProps) {
   if (error || !snapshot) {
     return (
       <main className="app-page">
-        <div className="app-page-card app-page-card-mobile-fill flex flex-col">
-          <AppBanner label="Say Less" />
+        <div className="app-page-card app-page-card-wide app-page-card-mobile-fill h-[calc(100svh-1.5rem)] max-h-[calc(100svh-1.5rem)] sm:h-[80vh] sm:max-h-[80vh] flex flex-col overflow-hidden">
+          <AppBanner label={ROOM_LOADING_LABEL} />
           <p className="mt-6 text-xl font-bold">Room unavailable</p>
           <p className="mt-2 text-sm text-slate-600">{error ?? "Unknown error."}</p>
         </div>
@@ -686,11 +738,37 @@ export function SayLessRoomClient({ code }: RoomClientProps) {
     );
   }
 
-  if (!playerId || !me) {
+  const shouldAutoJoin =
+    readyForJoinGate &&
+    snapshot !== null &&
+    !me &&
+    !joinLoading &&
+    hasStoredPlayerPreferences();
+
+  if (!readyForJoinGate) {
+    return (
+      <main className="app-page">
+        <div className="app-page-card app-page-card-wide app-page-card-mobile-fill h-[calc(100svh-1.5rem)] max-h-[calc(100svh-1.5rem)] sm:h-[80vh] sm:max-h-[80vh] flex flex-col overflow-hidden">
+          <AppBanner label={ROOM_LOADING_LABEL} />
+          <div className="flex flex-1 items-center justify-center">
+            <div className="grid justify-items-center gap-3">
+              <div
+                aria-hidden="true"
+                className="h-12 w-12 animate-spin rounded-full border-4 border-slate-300 border-t-black"
+              />
+              <p className="text-sm font-semibold text-slate-600">Loading room...</p>
+            </div>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  if ((!playerId || !me) && !shouldAutoJoin) {
     return (
       <main className="app-page">
         <EntryProfileForm
-          bannerLabel="Say Less"
+          bannerLabel={GAME?.name}
           error={joinError}
           initialCode={snapshot.room.code}
           initialColor={joinDefaults.color}
@@ -702,6 +780,25 @@ export function SayLessRoomClient({ code }: RoomClientProps) {
           submitLabel="Join"
           title="Join Room"
         />
+      </main>
+    );
+  }
+
+  if (!playerId || !me) {
+    return (
+      <main className="app-page">
+        <div className="app-page-card app-page-card-wide app-page-card-mobile-fill h-[calc(100svh-1.5rem)] max-h-[calc(100svh-1.5rem)] sm:h-[80vh] sm:max-h-[80vh] flex flex-col overflow-hidden">
+          <AppBanner label={ROOM_LOADING_LABEL} />
+          <div className="flex flex-1 items-center justify-center">
+            <div className="grid justify-items-center gap-3">
+              <div
+                aria-hidden="true"
+                className="h-12 w-12 animate-spin rounded-full border-4 border-slate-300 border-t-black"
+              />
+              <p className="text-sm font-semibold text-slate-600">Joining room...</p>
+            </div>
+          </div>
+        </div>
       </main>
     );
   }
@@ -750,9 +847,9 @@ export function SayLessRoomClient({ code }: RoomClientProps) {
   const startTurnBusy = busyAction === "start-turn";
 
   return (
-    <main className="app-page">
-      <div className="app-page-card app-page-card-mobile-fill relative flex h-[calc(100svh-1.5rem)] max-h-[calc(100svh-1.5rem)] flex-col overflow-hidden sm:h-[80vh] sm:max-h-[80vh]">
-        <AppBanner label="Say Less" />
+      <main className="app-page">
+        <div className="app-page-card app-page-card-mobile-fill relative flex h-[calc(100svh-1.5rem)] max-h-[calc(100svh-1.5rem)] flex-col overflow-hidden sm:h-[80vh] sm:max-h-[80vh]">
+        <AppBanner label={GAME?.name} />
 
         <div className="flex min-h-0 flex-1 flex-col gap-3 pt-3">
           <section className="-mx-[var(--card-padding)] border-b border-slate-200 px-[var(--card-padding)] pb-3">

@@ -9,6 +9,7 @@ import type { PlayerProfile } from "@/types/games";
 const PLAYER_NAME_KEY = "playerName";
 const PLAYER_COLOR_KEY = "playerColor";
 const PLAYER_EMOJI_KEY = "playerEmoji";
+const PLAYER_PROFILE_SET_KEY = "playerProfileSet";
 const PLAYER_COLOR_SET: Set<string> = new Set<string>(
   PLAYER_COLOR_POOL.map((color) => color.toLowerCase()),
 );
@@ -22,6 +23,17 @@ const DEFAULT_PLAYER_PREFERENCES: PlayerProfile = {
 
 export function getDefaultPlayerPreferences(): PlayerProfile {
   return { ...DEFAULT_PLAYER_PREFERENCES };
+}
+
+export function hasStoredPlayerPreferences() {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  return (
+    localStorage.getItem(PLAYER_PROFILE_SET_KEY) === "1" &&
+    (localStorage.getItem(PLAYER_NAME_KEY) ?? "").trim().length > 0
+  );
 }
 
 export function getStoredPlayerPreferences(): PlayerProfile {
@@ -42,7 +54,8 @@ export function setStoredPlayerPreferences(profile: PlayerProfile) {
     return;
   }
 
-  localStorage.setItem(PLAYER_NAME_KEY, profile.name.trim());
+  const trimmedName = profile.name.trim();
+  localStorage.setItem(PLAYER_NAME_KEY, trimmedName);
   const normalizedColor = profile.color.toLowerCase();
   localStorage.setItem(
     PLAYER_COLOR_KEY,
@@ -53,4 +66,5 @@ export function setStoredPlayerPreferences(profile: PlayerProfile) {
     PLAYER_EMOJI_KEY,
     PLAYER_EMOJI_SET.has(profile.emoji) ? profile.emoji : DEFAULT_PLAYER_EMOJI,
   );
+  localStorage.setItem(PLAYER_PROFILE_SET_KEY, trimmedName ? "1" : "0");
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppBanner } from "@/components/app-banner";
 import { AnsweringStage } from "@/components/games/whosdoneit/room/answering-stage";
@@ -15,6 +15,7 @@ import { RevealSummaryStage } from "@/components/games/whosdoneit/room/reveal-su
 import { RevealingStage } from "@/components/games/whosdoneit/room/revealing-stage";
 import { SettingsSheet } from "@/components/games/whosdoneit/room/settings-sheet";
 import { SubmissionWaitingStage } from "@/components/games/whosdoneit/room/submission-waiting-stage";
+import { getGameBySlug } from "@/lib/game-catalog";
 import {
   addFakePlayers,
   advanceReveal,
@@ -45,12 +46,17 @@ import { getDefaultHostSettings } from "@/lib/games/whosdoneit/host-settings-pre
 import {
   getDefaultPlayerPreferences,
   getStoredPlayerPreferences,
+  hasStoredPlayerPreferences,
   setStoredPlayerPreferences,
 } from "@/lib/player-preferences";
+import { ROOM_LOADING_LABEL } from "@/lib/site-config";
 import type { GameSnapshot, Player } from "@/types/whosdoneit";
+
+const GAME = getGameBySlug("whosdoneit");
 
 type RoomClientProps = {
   code: string;
+  initialSnapshot?: GameSnapshot | null;
 };
 
 type SettingsDraft = {
@@ -74,12 +80,13 @@ function sortLeaderboard(players: Player[]) {
   );
 }
 
-export function RoomClient({ code }: RoomClientProps) {
+export function RoomClient({ code, initialSnapshot = null }: RoomClientProps) {
   const normalizedCode = code.toUpperCase();
   const router = useRouter();
   const [playerId, setPlayerId] = useState<string | null>(null);
-  const [snapshot, setSnapshot] = useState<GameSnapshot | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [snapshot, setSnapshot] = useState<GameSnapshot | null>(initialSnapshot);
+  const [loading, setLoading] = useState(initialSnapshot === null);
+  const [readyForJoinGate, setReadyForJoinGate] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [joinLoading, setJoinLoading] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
@@ -109,6 +116,7 @@ export function RoomClient({ code }: RoomClientProps) {
       selectedEmoji: joinDefaults.emoji || DEFAULT_PLAYER_EMOJI,
     }),
   );
+  const attemptedAutoJoinRef = useRef(false);
   const [settingsDraft, setSettingsDraft] = useState<SettingsDraft>({
     ...getDefaultHostSettings(),
   });
@@ -140,8 +148,15 @@ export function RoomClient({ code }: RoomClientProps) {
       localStorage.getItem("playerId");
     setPlayerId(storedPlayerId);
     setJoinDefaults(getStoredPlayerPreferences());
+    setReadyForJoinGate(true);
+    if (initialSnapshot) {
+      setSnapshot(initialSnapshot);
+      setLoading(false);
+      return;
+    }
+
     void loadSnapshot(true);
-  }, [loadSnapshot, normalizedCode]);
+  }, [initialSnapshot, loadSnapshot, normalizedCode]);
 
   useEffect(() => {
     if (!snapshot?.room.id) {
@@ -340,6 +355,29 @@ export function RoomClient({ code }: RoomClientProps) {
     [loadSnapshot, normalizedCode, router],
   );
 
+  useEffect(() => {
+    if (loading || error || !snapshot || me || joinLoading) {
+      return;
+    }
+
+    if (attemptedAutoJoinRef.current || !hasStoredPlayerPreferences()) {
+      return;
+    }
+
+    const storedPreferences = getStoredPlayerPreferences();
+    if (!storedPreferences.name.trim()) {
+      return;
+    }
+
+    attemptedAutoJoinRef.current = true;
+    void handleInlineJoin({
+      code: snapshot.room.code,
+      name: storedPreferences.name,
+      color: storedPreferences.color,
+      emoji: storedPreferences.emoji,
+    });
+  }, [error, handleInlineJoin, joinLoading, loading, me, snapshot]);
+
   const handleSaveSettings = useCallback(
     async (settings: {
       promptSeconds: number;
@@ -463,7 +501,7 @@ export function RoomClient({ code }: RoomClientProps) {
     return (
       <main className="app-page">
         <div className="app-page-card app-page-card-wide app-page-card-mobile-fill h-[calc(100svh-1.5rem)] max-h-[calc(100svh-1.5rem)] sm:h-[80vh] sm:max-h-[80vh] flex flex-col overflow-hidden">
-          <AppBanner />
+          <AppBanner label={ROOM_LOADING_LABEL} />
           <div className="flex flex-1 items-center justify-center">
             <div className="grid justify-items-center gap-3">
               <div
@@ -482,7 +520,7 @@ export function RoomClient({ code }: RoomClientProps) {
     return (
       <main className="app-page">
         <div className="app-page-card app-page-card-wide app-page-card-mobile-fill h-[calc(100svh-1.5rem)] max-h-[calc(100svh-1.5rem)] sm:h-[80vh] sm:max-h-[80vh] overflow-hidden">
-          <AppBanner />
+          <AppBanner label={GAME?.name} />
           <p className="text-xl font-bold">Room unavailable</p>
           <p className="mt-2 text-sm text-slate-600">{error ?? "Unknown error."}</p>
         </div>
@@ -490,7 +528,33 @@ export function RoomClient({ code }: RoomClientProps) {
     );
   }
 
-  if (!playerId || !me) {
+  const shouldAutoJoin =
+    readyForJoinGate &&
+    snapshot !== null &&
+    !me &&
+    !joinLoading &&
+    hasStoredPlayerPreferences();
+
+  if (!readyForJoinGate) {
+    return (
+      <main className="app-page">
+        <div className="app-page-card app-page-card-wide app-page-card-mobile-fill h-[calc(100svh-1.5rem)] max-h-[calc(100svh-1.5rem)] sm:h-[80vh] sm:max-h-[80vh] flex flex-col overflow-hidden">
+          <AppBanner label={ROOM_LOADING_LABEL} />
+          <div className="flex flex-1 items-center justify-center">
+            <div className="grid justify-items-center gap-3">
+              <div
+                aria-hidden="true"
+                className="h-12 w-12 animate-spin rounded-full border-4 border-slate-300 border-t-black"
+              />
+              <p className="text-sm font-semibold text-slate-600">Loading room...</p>
+            </div>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  if ((!playerId || !me) && !shouldAutoJoin) {
     return (
       <main className="app-page">
         <EntryProfileForm
@@ -505,6 +569,25 @@ export function RoomClient({ code }: RoomClientProps) {
           submitLabel="Join"
           title="Join Room"
         />
+      </main>
+    );
+  }
+
+  if (!playerId || !me) {
+    return (
+      <main className="app-page">
+        <div className="app-page-card app-page-card-wide app-page-card-mobile-fill h-[calc(100svh-1.5rem)] max-h-[calc(100svh-1.5rem)] sm:h-[80vh] sm:max-h-[80vh] flex flex-col overflow-hidden">
+          <AppBanner label={ROOM_LOADING_LABEL} />
+          <div className="flex flex-1 items-center justify-center">
+            <div className="grid justify-items-center gap-3">
+              <div
+                aria-hidden="true"
+                className="h-12 w-12 animate-spin rounded-full border-4 border-slate-300 border-t-black"
+              />
+              <p className="text-sm font-semibold text-slate-600">Joining room...</p>
+            </div>
+          </div>
+        </div>
       </main>
     );
   }
@@ -611,7 +694,7 @@ export function RoomClient({ code }: RoomClientProps) {
   return (
     <main className="app-page">
       <div className="app-page-card app-page-card-wide app-page-card-mobile-fill h-[calc(100svh-1.5rem)] max-h-[calc(100svh-1.5rem)] sm:h-[80vh] sm:max-h-[80vh] relative flex flex-col overflow-hidden">
-        <AppBanner />
+        <AppBanner label={GAME?.name} />
 
         <div className="flex min-h-0 flex-1 flex-col gap-3 pt-3">
           <section className="-mx-[var(--card-padding)] border-b border-slate-200 px-[var(--card-padding)] pb-3">

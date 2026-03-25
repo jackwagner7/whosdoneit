@@ -28,8 +28,10 @@ export function DraftingStage({
   onSkip,
   onKeep,
 }: DraftingStageProps) {
+  const showLoadingPlaceholder = loadingCard && !card;
+
   return (
-    <section className="card-enter flex min-h-0 flex-1 flex-col overflow-y-auto pb-4">
+    <section className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-4">
       <header className="shrink-0">
         <div className="flex items-start justify-between gap-4">
           <p className="stage-heading">Draft</p>
@@ -50,7 +52,7 @@ export function DraftingStage({
         </div>
       </header>
 
-      {loadingCard ? (
+      {showLoadingPlaceholder ? (
         <div className="mt-5 flex min-h-0 flex-1">
           <div className="flex min-h-0 flex-1 flex-col gap-3">
             <div className="flex min-h-[18rem] flex-1 flex-col items-center justify-center rounded-3xl border border-slate-200 bg-slate-50 px-5 py-8 text-center">
@@ -80,24 +82,37 @@ export function DraftingStage({
         </div>
       ) : null}
 
-      {!loadingCard && card ? (
+      {card ? (
         <div className="mt-5 flex min-h-0 flex-1">
-          <SwipeCard
-            busy={busy}
-            description={card.description}
-            leftHint="Skip"
-            leftLabel="Skip"
-            onSwipeLeft={onSkip}
-            onSwipeRight={onKeep}
-            points={card.points}
-            rightHint="Keep"
-            rightLabel="Keep"
-            title={card.title}
-          />
+          <div className="relative flex min-h-0 flex-1">
+            <SwipeCard
+              busy={busy || loadingCard}
+              description={card.description}
+              leftHint="Skip"
+              leftLabel="Skip"
+              onSwipeLeft={onSkip}
+              onSwipeRight={onKeep}
+              points={card.points}
+              rightHint="Keep"
+              rightLabel="Keep"
+              title={card.title}
+            />
+            {loadingCard ? (
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-[2rem] bg-white/75 backdrop-blur-[2px]">
+                <div className="grid justify-items-center gap-3 text-center">
+                  <div
+                    aria-hidden="true"
+                    className="h-10 w-10 animate-spin rounded-full border-4 border-slate-300 border-t-slate-900"
+                  />
+                  <p className="text-sm font-semibold text-slate-700">Loading next card</p>
+                </div>
+              </div>
+            ) : null}
+          </div>
         </div>
       ) : null}
 
-      {!loadingCard && !card && doneDrafting ? (
+      {!showLoadingPlaceholder && !card && doneDrafting ? (
         <div className="mt-5 flex min-h-0 flex-1">
           <div className="flex min-h-[18rem] flex-1 flex-col justify-center rounded-3xl border border-slate-200 bg-slate-50 px-5 py-6">
             <p className="text-lg font-black text-slate-950">You are done drafting.</p>
@@ -108,7 +123,7 @@ export function DraftingStage({
         </div>
       ) : null}
 
-      {!loadingCard && !card && !doneDrafting ? (
+      {!showLoadingPlaceholder && !card && !doneDrafting ? (
         <div className="mt-5 flex min-h-0 flex-1">
           <div className="flex min-h-[18rem] flex-1 flex-col items-center justify-center rounded-3xl border border-slate-200 bg-slate-50 px-5 py-8 text-center">
             <div
