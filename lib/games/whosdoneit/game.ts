@@ -1,4 +1,8 @@
 import type { RealtimeChannel } from "@supabase/supabase-js";
+import {
+  DEFAULT_PLAYER_COLOR,
+  PLAYER_COLOR_POOL,
+} from "@/lib/player-color-pool";
 import { PLAYER_EMOJI_POOL } from "@/lib/player-emoji-pool";
 import { supabase } from "@/lib/supabase";
 import type {
@@ -30,32 +34,8 @@ const DEFAULT_ROOM_SETTINGS: RoomSettings = {
   fastMode: false,
 };
 
-export const PLAYER_COLOR_POOL = [
-  "#2563eb",
-  "#0ea5e9",
-  "#06b6d4",
-  "#14b8a6",
-  "#10b981",
-  "#22c55e",
-  "#84cc16",
-  "#eab308",
-  "#f59e0b",
-  "#f97316",
-  "#f97393",
-  "#ec4899",
-  "#d946ef",
-  "#a855f7",
-  "#8b5cf6",
-  "#6366f1",
-  "#ef4444",
-  "#dc2626",
-  "#b91c1c",
-  "#475569",
-] as const;
-
+export { DEFAULT_PLAYER_COLOR, PLAYER_COLOR_POOL };
 export { PLAYER_EMOJI_POOL };
-
-export const DEFAULT_PLAYER_COLOR = PLAYER_COLOR_POOL[0];
 export const DEFAULT_PLAYER_EMOJI = PLAYER_EMOJI_POOL[0];
 
 const PLAYER_COLOR_SET: Set<string> = new Set<string>(

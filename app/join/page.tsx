@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { AppBanner } from "@/components/app-banner";
 import { EntryProfileForm } from "@/components/entry-profile-form";
 import {
@@ -21,7 +21,6 @@ export default function JoinPage() {
   const [needsProfile, setNeedsProfile] = useState<boolean | null>(null);
   const attemptedAutoJoinRef = useRef(false);
   const router = useRouter();
-  const searchParams = useSearchParams();
 
   const handleJoin = useCallback(
     async (values: {
@@ -63,7 +62,8 @@ export default function JoinPage() {
   );
 
   useEffect(() => {
-    const code = searchParams.get("code")?.trim().toUpperCase() ?? "";
+    const code =
+      new URLSearchParams(window.location.search).get("code")?.trim().toUpperCase() ?? "";
     const storedPreferences = getStoredPlayerPreferences();
     setDefaults(storedPreferences);
     setInitialCode(code);
@@ -89,7 +89,7 @@ export default function JoinPage() {
       color: storedPreferences.color,
       emoji: storedPreferences.emoji,
     });
-  }, [handleJoin, searchParams]);
+  }, [handleJoin]);
 
   return (
     <main className="app-page">

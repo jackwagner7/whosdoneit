@@ -1,9 +1,8 @@
 import {
-  DEFAULT_PLAYER_COLOR,
   DEFAULT_PLAYER_EMOJI,
-  PLAYER_COLOR_POOL,
   PLAYER_EMOJI_POOL,
 } from "@/lib/game";
+import { DEFAULT_PLAYER_COLOR, PLAYER_COLOR_POOL } from "@/lib/player-color-pool";
 import type { PlayerProfile } from "@/types/games";
 
 const PLAYER_NAME_KEY = "playerName";
