@@ -103,7 +103,7 @@ export default function JoinPage() {
           initialName={defaults.name}
           loading={loading}
           onSubmit={handleJoin}
-          showCodeInput
+          showCodeInput={!initialCode}
           submitLabel="Join"
           title="Join Room"
         />

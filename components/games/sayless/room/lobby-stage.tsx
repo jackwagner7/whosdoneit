@@ -35,9 +35,6 @@ export function LobbyStage({
       <header className="shrink-0 flex items-start justify-between gap-2">
         <div>
           <p className="stage-heading">Lobby</p>
-          <p className="stage-subheading mt-1">
-            Tap a team color to switch sides before the round starts.
-          </p>
         </div>
         <p className="stage-subheading">{players.length} players</p>
       </header>

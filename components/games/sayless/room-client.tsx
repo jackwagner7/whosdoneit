@@ -345,16 +345,6 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
     });
   }, [me, snapshot]);
 
-  const takenColorsForProfile = useMemo(() => {
-    if (!snapshot || !me) {
-      return [] as string[];
-    }
-
-    return snapshot.players
-      .filter((player) => player.id !== me.id)
-      .map((player) => player.color);
-  }, [me, snapshot]);
-
   const openProfileSettings = useCallback(() => {
     if (!me) {
       return;
@@ -369,7 +359,6 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
     setProfileColorOptions(
       buildColorChoices({
         selectedColor: me.color,
-        takenColors: takenColorsForProfile,
       }),
     );
     setProfileEmojiOptions(
@@ -378,7 +367,7 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
       }),
     );
     setProfileOpen(true);
-  }, [me, takenColorsForProfile]);
+  }, [me]);
 
   const runAction = useCallback(
     async (actionKey: string, fn: () => Promise<void>) => {
@@ -579,7 +568,6 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
     setProfileColorOptions((previousOptions) => {
       const nextOptions = refreshColorChoices({
         previousChoices: previousOptions,
-        takenColors: takenColorsForProfile,
       });
 
       setProfileDraft((current) => ({
@@ -589,7 +577,7 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
 
       return nextOptions;
     });
-  }, [takenColorsForProfile]);
+  }, []);
 
   const refreshProfileEmojis = useCallback(() => {
     setProfileEmojiOptions((previousOptions) => {
@@ -776,7 +764,6 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
           initialName={joinDefaults.name}
           loading={joinLoading}
           onSubmit={handleInlineJoin}
-          showCodeInput
           submitLabel="Join"
           title="Join Room"
         />
@@ -1089,7 +1076,6 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
           onSave={handleSaveProfile}
           open={profileOpen}
           saving={profileSaving}
-          takenColors={takenColorsForProfile}
           values={profileDraft}
         />
       </div>

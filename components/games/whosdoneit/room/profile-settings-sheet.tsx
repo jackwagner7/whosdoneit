@@ -17,7 +17,6 @@ type ProfileSettingsSheetProps = {
   values: ProfileDraft;
   colorOptions: string[];
   emojiOptions: string[];
-  takenColors: string[];
   onChange: (values: ProfileDraft) => void;
   onRefreshColors: () => void;
   onRefreshEmojis: () => void;
@@ -32,7 +31,6 @@ export function ProfileSettingsSheet({
   values,
   colorOptions,
   emojiOptions,
-  takenColors,
   onChange,
   onRefreshColors,
   onRefreshEmojis,
@@ -73,7 +71,7 @@ export function ProfileSettingsSheet({
             onRefresh={onRefreshColors}
             options={colorOptions}
             refreshAriaLabel="Refresh colour options"
-            unavailableOptions={takenColors}
+            unavailableOptions={[]}
             value={values.color}
           />
 

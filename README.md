@@ -1,36 +1,53 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Who's Done It
 
-## Getting Started
+This app is set up to run against a local Supabase stack in development.
 
-First, run the development server:
+## Prerequisites
+
+- Node.js
+- Docker Desktop
+- Supabase CLI
+
+## Local setup
+
+1. Copy the tracked env template if you need a fresh local env file.
+
+```bash
+cp .env.example .env.local
+```
+
+2. Start the local Supabase stack.
+
+```bash
+npm run supabase:start
+```
+
+3. Reset and seed the local database from the checked-in SQL files.
+
+```bash
+npm run supabase:reset
+```
+
+4. Start the Next.js app.
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Local services
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- App: `http://localhost:3000`
+- Supabase API: `http://127.0.0.1:54321`
+- Supabase Studio: `http://127.0.0.1:54323`
+- Local Postgres: `postgresql://postgres:postgres@127.0.0.1:54322/postgres`
 
-## Learn More
+## Database bootstrap
 
-To learn more about Next.js, take a look at the following resources:
+Local `supabase db reset` applies:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- `supabase/migrations/*.sql`
+- `supabase/reseed_sayless_pop_culture_cards.sql`
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+The migration files bootstrap the schema. The reseed file refreshes the Say Less card catalog.

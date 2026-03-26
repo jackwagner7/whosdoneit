@@ -988,14 +988,6 @@ export async function joinRoom(code: string, name: string, color?: string, emoji
     throw new Error("That name is already taken in this room.");
   }
 
-  if (
-    snapshot.players.some(
-      (player) => (player.color ?? "").toLowerCase() === normalizedColor,
-    )
-  ) {
-    throw new Error("That color was just taken. Choose another.");
-  }
-
   const assignedTeamIndex = getBalancedTeamIndex(
     snapshot.players,
     snapshot.room.team_count,
@@ -1182,16 +1174,6 @@ export async function updatePlayerProfile(
     )
   ) {
     throw new Error("That name is already taken in this room.");
-  }
-
-  if (
-    snapshot.players.some(
-      (player) =>
-        player.id !== playerId &&
-        (player.color ?? "").toLowerCase() === normalizedColor,
-    )
-  ) {
-    throw new Error("That color was just taken. Choose another.");
   }
 
   const { error } = await supabase

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { PlayerColorPicker } from "@/components/player-color-picker";
 import { PlayerEmojiPicker } from "@/components/player-emoji-picker";
 import {
@@ -18,7 +18,6 @@ type JoinInlineProps = {
   defaultName: string;
   defaultColor: string;
   defaultEmoji: string;
-  takenColors: string[];
   onJoin: (name: string, color: string, emoji: string) => Promise<void>;
 };
 
@@ -29,7 +28,6 @@ export function JoinInline({
   defaultName,
   defaultColor,
   defaultEmoji,
-  takenColors,
   onJoin,
 }: JoinInlineProps) {
   const [name, setName] = useState(defaultName);
@@ -38,16 +36,10 @@ export function JoinInline({
   const [colorOptions, setColorOptions] = useState(() =>
     buildColorChoices({
       selectedColor: defaultColor || DEFAULT_PLAYER_COLOR,
-      takenColors,
     }),
   );
   const [emojiOptions, setEmojiOptions] = useState(() =>
     buildEmojiChoices({ selectedEmoji: defaultEmoji || DEFAULT_PLAYER_EMOJI }),
-  );
-
-  const takenColorsKey = useMemo(
-    () => [...new Set(takenColors.map((entry) => entry.toLowerCase()))].sort().join(","),
-    [takenColors],
   );
 
   useEffect(() => {
@@ -63,11 +55,9 @@ export function JoinInline({
   }, [defaultEmoji]);
 
   useEffect(() => {
-    const taken = takenColorsKey ? takenColorsKey.split(",") : [];
     setColorOptions((previousChoices) => {
       const nextChoices = buildColorChoices({
         selectedColor: color,
-        takenColors: taken,
         previousChoices,
       });
 
@@ -77,7 +67,7 @@ export function JoinInline({
 
       return nextChoices;
     });
-  }, [color, takenColorsKey]);
+  }, [color]);
 
   return (
     <section className="card-enter rounded-3xl border border-slate-200 bg-white p-5 pb-28 shadow-sm">
@@ -98,7 +88,7 @@ export function JoinInline({
         <PlayerColorPicker
           onChange={setColor}
           options={colorOptions}
-          unavailableOptions={takenColors}
+          unavailableOptions={[]}
           value={color}
         />
       </div>
