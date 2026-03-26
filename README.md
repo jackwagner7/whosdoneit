@@ -51,3 +51,11 @@ Local `supabase db reset` applies:
 - `supabase/reseed_sayless_pop_culture_cards.sql`
 
 The migration files bootstrap the schema. The reseed file refreshes the Say Less card catalog.
+
+
+## Stuff I forget
+
+- npm run dev
+- npx start supabase
+- npx reset supabase
+- npx supabase db push
