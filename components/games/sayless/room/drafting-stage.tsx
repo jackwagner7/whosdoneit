@@ -5,6 +5,7 @@ import { SwipeCard } from "@/components/games/sayless/room/swipe-card";
 
 type DraftingStageProps = {
   card: SayLessCard | null;
+  handCount: number;
   draftedCount: number;
   targetCount: number;
   totalDrafted: number;
@@ -18,6 +19,7 @@ type DraftingStageProps = {
 
 export function DraftingStage({
   card,
+  handCount,
   draftedCount,
   targetCount,
   totalDrafted,
@@ -36,6 +38,12 @@ export function DraftingStage({
         <div className="flex items-start justify-between gap-4">
           <p className="stage-heading">Draft</p>
           <div className="flex items-start gap-4 text-[0.72rem] font-black uppercase tracking-[0.14em] text-slate-500">
+            <div className="text-center">
+              <p>Hand</p>
+              <p className="mt-1 text-base font-black tracking-normal text-slate-950">
+                {handCount}
+              </p>
+            </div>
             <div className="text-center">
               <p>Your picks</p>
               <p className="mt-1 text-base font-black tracking-normal text-slate-950">
@@ -60,7 +68,7 @@ export function DraftingStage({
                 aria-hidden="true"
                 className="h-10 w-10 animate-spin rounded-full border-4 border-slate-300 border-t-slate-900"
               />
-              <p className="mt-4 text-sm font-semibold text-slate-600">Loading card</p>
+              <p className="mt-4 text-sm font-semibold text-slate-600">Loading hand</p>
             </div>
             <div className="grid grid-cols-2 gap-3 opacity-45">
               <button
@@ -104,7 +112,7 @@ export function DraftingStage({
                     aria-hidden="true"
                     className="h-10 w-10 animate-spin rounded-full border-4 border-slate-300 border-t-slate-900"
                   />
-                  <p className="text-sm font-semibold text-slate-700">Loading next card</p>
+                  <p className="text-sm font-semibold text-slate-700">Loading next hand</p>
                 </div>
               </div>
             ) : null}
@@ -130,7 +138,7 @@ export function DraftingStage({
               aria-hidden="true"
               className="h-10 w-10 animate-spin rounded-full border-4 border-slate-300 border-t-slate-900"
             />
-            <p className="mt-4 text-sm font-semibold text-slate-600">Loading card</p>
+            <p className="mt-4 text-sm font-semibold text-slate-600">Loading hand</p>
           </div>
         </div>
       ) : null}

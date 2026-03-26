@@ -248,6 +248,12 @@ export function RoomClient({ code, initialSnapshot = null }: RoomClientProps) {
     }
   }, [myPrompt, snapshot?.room.phase]);
 
+  useEffect(() => {
+    if (!loading && (error || !snapshot)) {
+      router.replace("/");
+    }
+  }, [error, loading, router, snapshot]);
+
   const round = useMemo(
     () => (snapshot ? getRoundProgress(snapshot) : null),
     [snapshot],
@@ -506,15 +512,7 @@ export function RoomClient({ code, initialSnapshot = null }: RoomClientProps) {
   }
 
   if (error || !snapshot) {
-    return (
-      <main className="app-page">
-        <div className="app-page-card app-page-card-wide app-page-card-mobile-fill h-[calc(100svh-1.5rem)] max-h-[calc(100svh-1.5rem)] sm:h-[80vh] sm:max-h-[80vh] overflow-hidden">
-          <AppBanner label={GAME?.name} />
-          <p className="text-xl font-bold">Room unavailable</p>
-          <p className="mt-2 text-sm text-slate-600">{error ?? "Unknown error."}</p>
-        </div>
-      </main>
-    );
+    return null;
   }
 
   const shouldAutoJoin =

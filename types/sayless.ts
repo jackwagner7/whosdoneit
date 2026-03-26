@@ -71,6 +71,7 @@ export type SayLessDraftHand = {
   room_id: string;
   player_id: string;
   card_id: string;
+  slot_index: number;
   created_at: string;
 };
 

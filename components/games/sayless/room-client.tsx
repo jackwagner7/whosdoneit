@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { AppBanner } from "@/components/app-banner";
 import { EntryProfileForm } from "@/components/entry-profile-form";
 import { DraftingStage } from "@/components/games/sayless/room/drafting-stage";
@@ -13,7 +14,7 @@ import { ProfileSettingsSheet } from "@/components/games/whosdoneit/room/profile
 import { getGameBySlug } from "@/lib/game-catalog";
 import {
   continueFromRoundSummary,
-  getDraftCardForPlayer,
+  getDraftBatchForPlayer,
   getRoomSnapshotByCode,
   getRoundTeamScores,
   getTeamName,
@@ -163,12 +164,12 @@ function buildTeamSummaries(snapshot: SayLessSnapshot) {
 }
 
 export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientProps) {
+  const router = useRouter();
   const normalizedCode = code.toUpperCase();
   const [playerId, setPlayerId] = useState<string | null>(null);
   const [snapshot, setSnapshot] = useState<SayLessSnapshot | null>(initialSnapshot);
-  const [draftCard, setDraftCard] = useState<SayLessCard | null>(null);
-  const [draftCardLoading, setDraftCardLoading] = useState(false);
-  const [draftRefreshKey, setDraftRefreshKey] = useState(0);
+  const [draftHand, setDraftHand] = useState<SayLessCard[]>([]);
+  const [draftBatchLoading, setDraftBatchLoading] = useState(false);
   const [loading, setLoading] = useState(initialSnapshot === null);
   const [readyForJoinGate, setReadyForJoinGate] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -316,11 +317,7 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
   const draftPhase = snapshot?.room.phase ?? null;
   const draftPlayerId = me?.id ?? null;
   const myDraftCount = draftPlayerId ? (draftCounts.get(draftPlayerId) ?? 0) : 0;
-  const myDraftRejectionCount =
-    snapshot && draftPlayerId
-      ? snapshot.draftRejections.filter((rejection) => rejection.player_id === draftPlayerId)
-          .length
-      : 0;
+  const draftCard = draftHand[0] ?? null;
 
   useEffect(() => {
     if (!snapshot || !me) {
@@ -655,45 +652,67 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
   );
 
   useEffect(() => {
-    if (!draftRoomId || !draftPlayerId || draftPhase !== "drafting") {
-      setDraftCard(null);
-      setDraftCardLoading(false);
+    if (!snapshot || !draftRoomId || !draftPlayerId || draftPhase !== "drafting") {
+      setDraftHand([]);
+      setDraftBatchLoading(false);
+      return;
+    }
+
+    const totalDraftTarget = snapshot.players.length * snapshot.state.cards_per_player;
+    const doneDrafting =
+      myDraftCount >= snapshot.state.cards_per_player ||
+      snapshot.roomCards.length >= totalDraftTarget;
+
+    if (doneDrafting) {
+      setDraftHand([]);
+      setDraftBatchLoading(false);
+      return;
+    }
+
+    if (draftHand.length > 0 || busyAction?.startsWith("draft-")) {
       return;
     }
 
     let active = true;
-    setDraftCardLoading(true);
+    setDraftBatchLoading(true);
 
-    void getDraftCardForPlayer(draftRoomId, draftPlayerId)
-      .then((card) => {
+    void getDraftBatchForPlayer(draftRoomId, draftPlayerId)
+      .then((cards) => {
         if (!active) {
           return;
         }
 
-        setDraftCard(card);
-        setDraftCardLoading(false);
+        setDraftHand(cards);
+        setDraftBatchLoading(false);
       })
       .catch((issue) => {
         if (!active) {
           return;
         }
 
-        setDraftCard(null);
-        setDraftCardLoading(false);
-        setActionError(issue instanceof Error ? issue.message : "Could not load card.");
+        setDraftHand([]);
+        setDraftBatchLoading(false);
+        setActionError(issue instanceof Error ? issue.message : "Could not load hand.");
       });
 
     return () => {
       active = false;
     };
   }, [
+    busyAction,
+    draftHand.length,
     draftPhase,
     draftPlayerId,
-    draftRefreshKey,
     draftRoomId,
     myDraftCount,
-    myDraftRejectionCount,
+    snapshot,
   ]);
+
+  useEffect(() => {
+    if (!loading && (error || !snapshot)) {
+      router.replace("/");
+    }
+  }, [error, loading, router, snapshot]);
 
   if (loading) {
     return (
@@ -715,15 +734,7 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
   }
 
   if (error || !snapshot) {
-    return (
-      <main className="app-page">
-        <div className="app-page-card app-page-card-wide app-page-card-mobile-fill h-[calc(100svh-1.5rem)] max-h-[calc(100svh-1.5rem)] sm:h-[80vh] sm:max-h-[80vh] flex flex-col overflow-hidden">
-          <AppBanner label={ROOM_LOADING_LABEL} />
-          <p className="mt-6 text-xl font-bold">Room unavailable</p>
-          <p className="mt-2 text-sm text-slate-600">{error ?? "Unknown error."}</p>
-        </div>
-      </main>
-    );
+    return null;
   }
 
   const shouldAutoJoin =
@@ -919,29 +930,30 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
             <DraftingStage
               busy={Boolean(busyAction)}
               card={draftCard}
+              handCount={draftHand.length}
               doneDrafting={doneDrafting}
               draftedCount={myDraftCount}
-              loadingCard={draftCardLoading}
+              loadingCard={draftBatchLoading}
               onKeep={() =>
                 runAction("draft-keep", async () => {
                   if (!draftCard) {
                     return;
                   }
 
-                  setDraftCardLoading(true);
+                  const wasLastCardInHand = draftHand.length <= 1;
                   try {
                     await submitDraftDecision(snapshot.room.id, me.id, draftCard.id, true);
                   } catch (issue) {
-                    if (
-                      issue instanceof Error &&
-                      issue.message.includes("just got taken")
-                    ) {
-                      await loadSnapshot();
-                      setDraftRefreshKey((current) => current + 1);
-                    }
+                    setDraftHand([]);
+                    await loadSnapshot();
                     throw issue;
                   }
-                  setDraftCard(null);
+                  setDraftHand((current) =>
+                    current.filter((card) => card.id !== draftCard.id),
+                  );
+                  if (wasLastCardInHand) {
+                    setDraftBatchLoading(true);
+                  }
                 })
               }
               onSkip={() =>
@@ -950,21 +962,20 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
                     return;
                   }
 
-                  setDraftCardLoading(true);
+                  const wasLastCardInHand = draftHand.length <= 1;
                   try {
                     await submitDraftDecision(snapshot.room.id, me.id, draftCard.id, false);
-                    setDraftRefreshKey((current) => current + 1);
                   } catch (issue) {
-                    if (
-                      issue instanceof Error &&
-                      issue.message.includes("just got taken")
-                    ) {
-                      await loadSnapshot();
-                      setDraftRefreshKey((current) => current + 1);
-                    }
+                    setDraftHand([]);
+                    await loadSnapshot();
                     throw issue;
                   }
-                  setDraftCard(null);
+                  setDraftHand((current) =>
+                    current.filter((card) => card.id !== draftCard.id),
+                  );
+                  if (wasLastCardInHand) {
+                    setDraftBatchLoading(true);
+                  }
                 })
               }
               targetCount={snapshot.state.cards_per_player}

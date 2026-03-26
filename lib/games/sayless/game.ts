@@ -535,8 +535,8 @@ export async function startGame(roomId: string, playerId: string) {
   });
 }
 
-export async function getDraftCardForPlayer(roomId: string, playerId: string) {
-  return callRpc<SayLessCard | null>("sl_get_draft_card_for_player", {
+export async function getDraftBatchForPlayer(roomId: string, playerId: string) {
+  return callRpc<SayLessCard[]>("sl_get_draft_batch_for_player", {
     p_room_id: roomId,
     p_player_id: playerId,
   });

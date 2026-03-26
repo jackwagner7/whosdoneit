@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { AppBanner } from "@/components/app-banner";
 import { SayLessRoomClient } from "@/components/games/sayless/room-client";
 import { RoomClient as WhosDoneItRoomClient } from "@/components/games/whosdoneit/room-client";
@@ -17,6 +18,7 @@ type RoomRouterClientProps = {
 };
 
 export function RoomRouterClient({ code }: RoomRouterClientProps) {
+  const router = useRouter();
   const [entry, setEntry] = useState<RoomDirectoryEntry | null>(null);
   const [whosDoneItSnapshot, setWhosDoneItSnapshot] = useState<GameSnapshot | null>(null);
   const [sayLessSnapshot, setSayLessSnapshot] = useState<SayLessSnapshot | null>(null);
@@ -74,6 +76,12 @@ export function RoomRouterClient({ code }: RoomRouterClientProps) {
     };
   }, [code]);
 
+  useEffect(() => {
+    if (!loading && (error || !entry)) {
+      router.replace("/");
+    }
+  }, [entry, error, loading, router]);
+
   if (loading) {
     return (
       <main className="app-page">
@@ -94,15 +102,7 @@ export function RoomRouterClient({ code }: RoomRouterClientProps) {
   }
 
   if (error || !entry) {
-    return (
-      <main className="app-page">
-        <div className="app-page-card app-page-card-wide app-page-card-mobile-fill h-[calc(100svh-1.5rem)] max-h-[calc(100svh-1.5rem)] sm:h-[80vh] sm:max-h-[80vh] flex flex-col overflow-hidden">
-          <AppBanner label={ROOM_LOADING_LABEL} />
-          <p className="mt-6 text-xl font-bold">Room unavailable</p>
-          <p className="mt-2 text-sm text-slate-600">{error ?? "Unknown error."}</p>
-        </div>
-      </main>
-    );
+    return null;
   }
 
   if (entry.game_type === "sayless") {
