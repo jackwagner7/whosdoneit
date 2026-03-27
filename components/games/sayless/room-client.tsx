@@ -930,7 +930,6 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
             <DraftingStage
               busy={Boolean(busyAction)}
               card={draftCard}
-              handCount={draftHand.length}
               doneDrafting={doneDrafting}
               draftedCount={myDraftCount}
               loadingCard={draftBatchLoading}

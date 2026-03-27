@@ -129,14 +129,15 @@ export function PlayingStage({
         <div className="mt-5 flex min-h-0 flex-1">
           <SwipeCard
             busy={busy}
+            key={card.id}
             description={card.card.description}
             leftHint="Pass"
             leftLabel="Pass"
             onSwipeLeft={onPass}
             onSwipeRight={onCorrect}
             points={card.card.points}
-            rightHint="Correct"
-            rightLabel="Correct"
+            rightHint="Got it!"
+            rightLabel="Got it!"
             title={card.card.title}
           />
         </div>

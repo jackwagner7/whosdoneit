@@ -5,7 +5,6 @@ import { SwipeCard } from "@/components/games/sayless/room/swipe-card";
 
 type DraftingStageProps = {
   card: SayLessCard | null;
-  handCount: number;
   draftedCount: number;
   targetCount: number;
   totalDrafted: number;
@@ -19,7 +18,6 @@ type DraftingStageProps = {
 
 export function DraftingStage({
   card,
-  handCount,
   draftedCount,
   targetCount,
   totalDrafted,
@@ -38,12 +36,6 @@ export function DraftingStage({
         <div className="flex items-start justify-between gap-4">
           <p className="stage-heading">Draft</p>
           <div className="flex items-start gap-4 text-[0.72rem] font-black uppercase tracking-[0.14em] text-slate-500">
-            <div className="text-center">
-              <p>Hand</p>
-              <p className="mt-1 text-base font-black tracking-normal text-slate-950">
-                {handCount}
-              </p>
-            </div>
             <div className="text-center">
               <p>Your picks</p>
               <p className="mt-1 text-base font-black tracking-normal text-slate-950">
@@ -95,6 +87,7 @@ export function DraftingStage({
           <div className="relative flex min-h-0 flex-1">
             <SwipeCard
               busy={busy || loadingCard}
+              key={card.id}
               description={card.description}
               leftHint="Skip"
               leftLabel="Skip"
