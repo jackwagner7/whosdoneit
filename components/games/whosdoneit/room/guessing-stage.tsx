@@ -70,9 +70,10 @@ export function GuessingStage({
     <section className="card-enter -mx-[var(--card-padding)] flex min-h-0 min-w-0 flex-1 flex-col px-[var(--card-padding)] pb-5 pt-2">
       <StageMetaBar
         deadlineAt={deadlineAt}
-        submittedCount={submittedPlayerCount}
+        trackingItems={[
+          { label: "Submitted", value: `${submittedPlayerCount}/${totalPlayerCount}` },
+        ]}
         title="Accusations"
-        totalCount={totalPlayerCount}
       />
       <p className="mt-3 rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-xl font-black text-slate-900 sm:text-2xl">
         {prompt}

@@ -1,7 +1,9 @@
 "use client";
 
+import { StageHeader } from "@/components/stage-header";
 import type { SayLessCard } from "@/types/sayless";
 import { SwipeCard } from "@/components/games/sayless/room/swipe-card";
+import type { TrackingStatItem } from "@/components/tracking-stat";
 
 type DraftingStageProps = {
   card: SayLessCard | null;
@@ -29,28 +31,14 @@ export function DraftingStage({
   onKeep,
 }: DraftingStageProps) {
   const showLoadingPlaceholder = loadingCard && !card;
+  const trackingItems: TrackingStatItem[] = [
+    { label: "Your picks", value: `${draftedCount}/${targetCount}` },
+    { label: "Room deck", value: `${totalDrafted}/${totalTarget}` },
+  ];
 
   return (
     <section className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-4">
-      <header className="shrink-0">
-        <div className="flex items-start justify-between gap-4">
-          <p className="stage-heading">Draft</p>
-          <div className="flex items-start gap-4 text-[0.72rem] font-black uppercase tracking-[0.14em] text-slate-500">
-            <div className="text-center">
-              <p>Your picks</p>
-              <p className="mt-1 text-base font-black tracking-normal text-slate-950">
-                {draftedCount}/{targetCount}
-              </p>
-            </div>
-            <div className="text-center">
-              <p>Room deck</p>
-              <p className="mt-1 text-base font-black tracking-normal text-slate-950">
-                {totalDrafted}/{totalTarget}
-              </p>
-            </div>
-          </div>
-        </div>
-      </header>
+      <StageHeader title="Draft" trackingItems={trackingItems} />
 
       {showLoadingPlaceholder ? (
         <div className="mt-5 flex min-h-0 flex-1">

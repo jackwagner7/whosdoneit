@@ -134,18 +134,17 @@ export function PromptingStage({
     <section className="card-enter -mx-[var(--card-padding)] flex min-h-0 min-w-0 flex-1 flex-col px-[var(--card-padding)] pb-5 pt-2">
       <StageMetaBar
         deadlineAt={deadlineAt}
-        submittedCount={submittedPromptCount}
+        trackingItems={[
+          { label: "Submitted", value: `${submittedPromptCount}/${playerCount}` },
+          ...(roundCount > 1
+            ? [{ label: "Round", value: `${Math.min(currentRoundNumber, roundCount)}/${roundCount}` }]
+            : []),
+        ]}
         title="Prompt"
-        totalCount={playerCount}
       />
       <p className="stage-subheading mt-1">
         Write one short prompt everyone can answer yes or no.
       </p>
-      {roundCount > 1 ? (
-        <p className="mt-1 text-xs text-slate-500">
-          Round {Math.min(currentRoundNumber, roundCount)}/{roundCount}
-        </p>
-      ) : null}
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4">
         <div className="w-full max-w-2xl">
           <input

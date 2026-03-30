@@ -1,6 +1,7 @@
 "use client";
 
 import { PlayerBox } from "@/components/player-box";
+import { StageHeader } from "@/components/stage-header";
 import type { Player } from "@/types/whosdoneit";
 
 type LobbyStageProps = {
@@ -20,14 +21,11 @@ export function LobbyStage({
 }: LobbyStageProps) {
   return (
     <section className="card-enter -mx-[var(--card-padding)] flex min-h-0 min-w-0 flex-1 flex-col px-[var(--card-padding)] pb-5 pt-2">
-      <header className="shrink-0 flex items-start justify-between gap-2">
-        <p className="stage-heading">Lobby</p>
-        <p className="stage-subheading">{players.length} players</p>
-      </header>
-
-      {!canStart ? (
-        <p className="stage-subheading mt-1 shrink-0">Need at least 2 players to start.</p>
-      ) : null}
+      <StageHeader
+        description={!canStart ? "Need at least 2 players to start." : undefined}
+        title="Lobby"
+        trackingItems={[{ label: "Players", value: `${players.length}` }]}
+      />
 
       <div className="mt-2 min-h-0 flex-1 overflow-y-auto overflow-x-hidden pr-1">
         <ul className="flex min-w-0 flex-wrap content-start justify-center gap-3">

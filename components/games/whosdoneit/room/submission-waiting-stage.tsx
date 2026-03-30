@@ -1,5 +1,7 @@
 "use client";
 
+import { StageHeader } from "@/components/stage-header";
+
 type SubmissionWaitingStageProps = {
   submittedCount: number;
   totalCount: number;
@@ -15,16 +17,18 @@ export function SubmissionWaitingStage({
 
   return (
     <section className="card-enter -mx-[var(--card-padding)] flex min-h-0 min-w-0 flex-1 flex-col px-[var(--card-padding)] pb-5 pt-2">
-      <header className="shrink-0">
-        <p className="stage-heading">{phaseLabel}</p>
-        <p className="stage-subheading mt-1">
-          {allSubmitted ? "All submissions are in." : `Waiting for ${phaseLabel.toLowerCase()} submissions.`}
-        </p>
-      </header>
+      <StageHeader
+        description={
+          allSubmitted
+            ? "All submissions are in."
+            : `Waiting for ${phaseLabel.toLowerCase()} submissions.`
+        }
+        title={phaseLabel}
+        trackingItems={[
+          { label: "Submitted", value: `${Math.min(submittedCount, totalCount)}/${totalCount}` },
+        ]}
+      />
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4">
-        <p className="text-5xl font-black tabular-nums text-slate-700 sm:text-6xl">
-          {Math.min(submittedCount, totalCount)}/{totalCount}
-        </p>
         {allSubmitted ? (
           <div className="grid justify-items-center gap-3">
             <div

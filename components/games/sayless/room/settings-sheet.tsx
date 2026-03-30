@@ -1,9 +1,12 @@
 "use client";
 
+import { useState } from "react";
+
 type SettingsSheetProps = {
   open: boolean;
   isHost: boolean;
   allowHostControls: boolean;
+  allowFakePlayers: boolean;
   teamName: string;
   teamIndex: number | null;
   teamCount: number;
@@ -11,11 +14,13 @@ type SettingsSheetProps = {
   roundCount: number;
   turnSeconds: number;
   saving: boolean;
+  addingFakePlayers: boolean;
   onTeamNameChange: (value: string) => void;
   onTeamCountChange: (teamCount: number) => void;
   onCardsPerPlayerChange: (value: number) => void;
   onRoundCountChange: (value: number) => void;
   onTurnSecondsChange: (value: number) => void;
+  onAddFakePlayers: (count: number) => Promise<void>;
   onClose: () => void;
   onSave: () => Promise<void>;
 };
@@ -91,6 +96,7 @@ export function SettingsSheet({
   open,
   isHost,
   allowHostControls,
+  allowFakePlayers,
   teamName,
   teamIndex,
   teamCount,
@@ -98,14 +104,18 @@ export function SettingsSheet({
   roundCount,
   turnSeconds,
   saving,
+  addingFakePlayers,
   onTeamNameChange,
   onTeamCountChange,
   onCardsPerPlayerChange,
   onRoundCountChange,
   onTurnSecondsChange,
+  onAddFakePlayers,
   onClose,
   onSave,
 }: SettingsSheetProps) {
+  const [fakePlayerCount, setFakePlayerCount] = useState(2);
+
   if (!open) {
     return null;
   }
@@ -172,6 +182,46 @@ export function SettingsSheet({
                   value={turnSeconds}
                 />
               </>
+            ) : null}
+
+            {isHost ? (
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-sm font-semibold text-slate-900">Testing</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Add fake users that auto-draft and auto-play when their turn comes up.
+                </p>
+                <div className="mt-3 grid grid-cols-[1fr_auto] items-end gap-2">
+                  <label className="grid gap-1">
+                    <span className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
+                      Fake users
+                    </span>
+                    <input
+                      className="settings-number-input rounded-xl border border-slate-300 bg-white px-3 py-2 text-center text-lg font-semibold"
+                      disabled={addingFakePlayers || !allowFakePlayers}
+                      max={20}
+                      min={1}
+                      onChange={(event) =>
+                        setFakePlayerCount(clamp(Number(event.target.value), 1, 20, 2))
+                      }
+                      type="number"
+                      value={fakePlayerCount}
+                    />
+                  </label>
+                  <button
+                    className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-bold uppercase tracking-[0.08em] disabled:opacity-60"
+                    disabled={addingFakePlayers || !allowFakePlayers}
+                    onClick={() => void onAddFakePlayers(fakePlayerCount)}
+                    type="button"
+                  >
+                    {addingFakePlayers ? "..." : "Add fake users"}
+                  </button>
+                </div>
+                {!allowFakePlayers ? (
+                  <p className="mt-2 text-xs text-slate-500">
+                    Fake users can only be added in lobby.
+                  </p>
+                ) : null}
+              </div>
             ) : null}
           </div>
         </div>

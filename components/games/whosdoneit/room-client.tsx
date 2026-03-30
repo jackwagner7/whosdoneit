@@ -682,26 +682,27 @@ export function RoomClient({ code, initialSnapshot = null }: RoomClientProps) {
       <div className="app-page-card app-page-card-wide app-page-card-mobile-fill h-[calc(100svh-1.5rem)] max-h-[calc(100svh-1.5rem)] sm:h-[80vh] sm:max-h-[80vh] relative flex flex-col overflow-hidden">
         <AppBanner label={GAME?.name} />
 
-        <div className="flex min-h-0 flex-1 flex-col gap-3 pt-3">
-          <section className="-mx-[var(--card-padding)] border-b border-slate-200 px-[var(--card-padding)] pb-3">
+        <div className="flex min-h-0 flex-1 flex-col gap-2 pt-2">
+          <section className="-mx-[var(--card-padding)] border-b border-slate-200 px-[var(--card-padding)] pb-2">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                <p className="text-base font-black tracking-[0.08em] sm:text-lg">
-                  Code: {snapshot.room.code}
-                </p>
                 <button
-                  className="rounded-lg border border-slate-300 px-2 py-1 text-xs font-bold uppercase tracking-[0.08em] text-slate-700"
+                  aria-label={linkCopied ? "Room link copied" : "Copy room link"}
+                  className={`rounded-lg px-1 text-base font-black tracking-[0.08em] transition-colors sm:text-lg ${
+                    linkCopied ? "text-emerald-600" : "text-slate-950"
+                  }`}
                   onClick={() => void handleCopyRoomLink()}
+                  title={linkCopied ? "Copied" : "Click to copy room link"}
                   type="button"
                 >
-                  {linkCopied ? "Copied" : "Copy link"}
+                  {snapshot.room.code}
                 </button>
               </div>
               <div className="flex items-center gap-2">
                 {snapshot.room.phase === "lobby" ? (
                   <button
                     aria-label="Profile settings"
-                    className="rounded-xl border border-slate-300 px-3 py-2 text-2xl font-bold leading-none"
+                    className="rounded-lg border border-slate-300 px-2.75 py-1.75 text-xl font-bold leading-none"
                     onClick={openProfileSettings}
                     type="button"
                   >
@@ -711,7 +712,7 @@ export function RoomClient({ code, initialSnapshot = null }: RoomClientProps) {
                 {me.is_host ? (
                   <button
                     aria-label="Host game settings"
-                    className="rounded-xl border border-slate-300 px-3 py-2 text-2xl font-bold leading-none"
+                    className="rounded-lg border border-slate-300 px-2.75 py-1.75 text-xl font-bold leading-none"
                     onClick={() => {
                       setSettingsDraft({
                       promptSeconds: snapshot.room.prompt_seconds,

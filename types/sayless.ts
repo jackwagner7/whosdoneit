@@ -97,6 +97,7 @@ export type SayLessRoomState = {
   active_player_id: string | null;
   active_card_entry_id: string | null;
   turn_deadline_at: string | null;
+  paused_turn_seconds_remaining: number | null;
   team_turn_counts: number[];
   created_at: string;
 };

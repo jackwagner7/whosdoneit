@@ -1,6 +1,7 @@
 "use client";
 
 import { PlayerBox } from "@/components/player-box";
+import { StageHeader } from "@/components/stage-header";
 import type { Player } from "@/types/whosdoneit";
 
 type LeaderboardStageProps = {
@@ -71,11 +72,13 @@ export function LeaderboardStage({
 
   return (
     <section className="card-enter -mx-[var(--card-padding)] flex min-h-0 min-w-0 flex-1 flex-col px-[var(--card-padding)] pb-5 pt-2">
-      <header className="shrink-0 flex items-start justify-between gap-2">
-        <p className="stage-heading">Standings</p>
-        <p className="stage-subheading">{players.length} players</p>
-      </header>
-      <p className="stage-subheading mt-1">Question {questionNumber}/{totalQuestions}</p>
+      <StageHeader
+        title="Standings"
+        trackingItems={[
+          { label: "Players", value: `${players.length}` },
+          { label: "Question", value: `${questionNumber}/${totalQuestions}` },
+        ]}
+      />
       <div className="mt-3 min-h-0 flex-1 overflow-y-auto overflow-x-hidden pr-1">
         <ol className="grid gap-3">
           {placementRows.map(({ player, place }) => (

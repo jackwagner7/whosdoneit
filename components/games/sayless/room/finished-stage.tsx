@@ -1,5 +1,7 @@
 "use client";
 
+import { StageHeader } from "@/components/stage-header";
+
 type TeamSummary = {
   teamIndex: number;
   teamName: string;
@@ -24,12 +26,10 @@ export function FinishedStage({
 }: FinishedStageProps) {
   return (
     <section className="card-enter flex min-h-0 flex-1 flex-col overflow-y-auto pb-4">
-      <header className="shrink-0">
-        <p className="stage-heading">Final Results</p>
-        <p className="stage-subheading mt-1">
-          The full deck is cleared. Totals stay visible here until the host resets to the lobby.
-        </p>
-      </header>
+      <StageHeader
+        description="The full deck is cleared. Totals stay visible here until the host resets to the lobby."
+        title="Final Results"
+      />
 
       <div className="mt-4 grid gap-3">
         {summaries.map((team) => (

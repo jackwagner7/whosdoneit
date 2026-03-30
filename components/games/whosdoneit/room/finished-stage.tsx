@@ -1,6 +1,7 @@
 "use client";
 
 import { PlayerBox } from "@/components/player-box";
+import { StageHeader } from "@/components/stage-header";
 import type { Player } from "@/types/whosdoneit";
 
 type FinishedStageProps = {
@@ -67,10 +68,10 @@ export function FinishedStage({
 
   return (
     <section className="card-enter -mx-[var(--card-padding)] flex min-h-0 min-w-0 flex-1 flex-col px-[var(--card-padding)] pb-5 pt-2">
-      <header className="shrink-0 flex items-start justify-between gap-2">
-        <p className="stage-heading">Final standings</p>
-        <p className="stage-subheading">{players.length} players</p>
-      </header>
+      <StageHeader
+        title="Final standings"
+        trackingItems={[{ label: "Players", value: `${players.length}` }]}
+      />
       <h2 className="mt-2 shrink-0 text-3xl font-black">
         {winner && hasSingleWinner
           ? `${winner.name} ${winner.emoji} wins`

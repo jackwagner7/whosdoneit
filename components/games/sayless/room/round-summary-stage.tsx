@@ -1,5 +1,7 @@
 "use client";
 
+import { StageHeader } from "@/components/stage-header";
+
 type TeamSummary = {
   teamIndex: number;
   teamName: string;
@@ -32,14 +34,15 @@ export function RoundSummaryStage({
 }: RoundSummaryStageProps) {
   return (
     <section className="card-enter flex min-h-0 flex-1 flex-col overflow-y-auto pb-4">
-      <header className="shrink-0">
-        <p className="stage-heading">Round {roundNumber} Scores</p>
-        <p className="stage-subheading mt-1">
-          {isFinalRound
+      <StageHeader
+        description={
+          isFinalRound
             ? "Final round complete. Check totals before locking the results."
-            : "Lowest total score starts the next round."}
-        </p>
-      </header>
+            : "Lowest total score starts the next round."
+        }
+        title={`Round ${roundNumber} Scores`}
+        trackingItems={[{ label: "Rounds", value: `${roundNumber}/${roundCount}` }]}
+      />
 
       <div className="mt-4 grid gap-3">
         {summaries.map((team) => (

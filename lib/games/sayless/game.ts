@@ -25,6 +25,7 @@ const MIN_ROUNDS = 1;
 const MAX_ROUNDS = 5;
 const MIN_TURN_SECONDS = 15;
 const MAX_TURN_SECONDS = 180;
+const TEST_BOT_NAME_PREFIX = "Test Bot";
 
 const DEFAULT_ROOM_SETTINGS: SayLessRoomSettings = {
   teamCount: 2,
@@ -91,6 +92,10 @@ function normalizeCode(code: string) {
   return code.trim().toUpperCase();
 }
 
+export function isTestBotName(name: string) {
+  return new RegExp(`^${TEST_BOT_NAME_PREFIX} \\d+$`).test(name);
+}
+
 function normalizeName(name: string) {
   return name.trim();
 }
@@ -151,6 +156,14 @@ function sanitizeTurnSeconds(value?: number) {
     MAX_TURN_SECONDS,
     DEFAULT_ROOM_SETTINGS.turnSeconds,
   );
+}
+
+function sanitizePausedTurnSecondsRemaining(value?: number | null) {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return null;
+  }
+
+  return Math.max(0, Math.min(MAX_TURN_SECONDS, Math.round(value)));
 }
 
 function sanitizeSettings(settings?: Partial<SayLessRoomSettings>): SayLessRoomSettings {
@@ -248,6 +261,7 @@ function createDefaultState(room: SayLessRoom): Omit<SayLessRoomState, "created_
     active_player_id: null,
     active_card_entry_id: null,
     turn_deadline_at: null,
+    paused_turn_seconds_remaining: null,
     team_turn_counts: Array.from({ length: room.team_count }, () => 0),
   };
 }
@@ -275,6 +289,9 @@ function normalizeState(room: SayLessRoom, state: SayLessRoomState | null) {
     active_player_id: state?.active_player_id ?? null,
     active_card_entry_id: state?.active_card_entry_id ?? null,
     turn_deadline_at: state?.turn_deadline_at ?? null,
+    paused_turn_seconds_remaining: sanitizePausedTurnSecondsRemaining(
+      state?.paused_turn_seconds_remaining ?? null,
+    ),
     team_turn_counts: Array.from({ length: room.team_count }, (_, index) => {
       const value = state?.team_turn_counts?.[index];
       return typeof value === "number" ? Math.max(0, Math.round(value)) : 0;
@@ -457,6 +474,23 @@ export async function joinRoom(code: string, name: string, color?: string, emoji
   };
 }
 
+export async function addFakePlayers(roomId: string, playerId: string, count: number) {
+  const createdCount = await callRpc<number>("sl_add_test_bots", {
+    p_room_id: roomId,
+    p_player_id: playerId,
+    p_count: Math.max(1, Math.min(20, Math.round(Number(count) || 0))),
+  });
+
+  return { createdCount };
+}
+
+export async function runTestBots(roomId: string, playerId: string) {
+  await callRpc("sl_run_test_bots", {
+    p_room_id: roomId,
+    p_player_id: playerId,
+  });
+}
+
 export async function updateTeamSelection(
   roomId: string,
   playerId: string,
@@ -572,6 +606,20 @@ export async function submitTurnAction(
     p_room_id: roomId,
     p_player_id: playerId,
     p_action: action,
+  });
+}
+
+export async function toggleTurnPause(roomId: string, playerId: string) {
+  await callRpc("sl_toggle_turn_pause", {
+    p_room_id: roomId,
+    p_player_id: playerId,
+  });
+}
+
+export async function skipRound(roomId: string, playerId: string) {
+  await callRpc("sl_skip_round", {
+    p_room_id: roomId,
+    p_player_id: playerId,
   });
 }
 

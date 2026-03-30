@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 
 type SwipeCardProps = {
   title: string;
@@ -62,9 +62,9 @@ export function SwipeCard({
   const startXRef = useRef(0);
   const previousSampleRef = useRef({ x: 0, time: 0 });
   const latestSampleRef = useRef({ x: 0, time: 0 });
-  const cardRef = useRef<HTMLDivElement | null>(null);
   const [dragX, setDragX] = useState(0);
   const [dragging, setDragging] = useState(false);
+  const [entering, setEntering] = useState(true);
   const [phase, setPhase] = useState<"idle" | "exit-left" | "exit-right">("idle");
 
   function resetDrag() {
@@ -100,23 +100,14 @@ export function SwipeCard({
     );
   }
 
-  useEffect(() => {
-    cardRef.current?.animate(
-      [
-        {
-          opacity: 0,
-          transform: "translateY(-64px)",
-        },
-        {
-          opacity: 1,
-          transform: "translateY(0)",
-        },
-      ],
-      {
-        duration: ENTER_DURATION_MS,
-        easing: "cubic-bezier(0.22, 1, 0.36, 1)",
-      },
-    );
+  useLayoutEffect(() => {
+    const frameId = window.requestAnimationFrame(() => {
+      setEntering(false);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+    };
   }, []);
 
   async function completeSwipe(direction: "left" | "right") {
@@ -181,10 +172,17 @@ export function SwipeCard({
     opacity = 0;
     transition =
       `transform ${EXIT_DURATION_MS}ms cubic-bezier(0.22, 1, 0.36, 1), opacity ${EXIT_FADE_DURATION_MS}ms ease`;
+  } else if (entering) {
+    transform = "translateY(-64px)";
+    opacity = 0;
+    transition = "none";
+  } else if (!dragging && dragX === 0) {
+    transition =
+      `transform ${ENTER_DURATION_MS}ms cubic-bezier(0.22, 1, 0.36, 1), opacity ${ENTER_DURATION_MS}ms ease`;
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-x-hidden bg-white select-none">
+    <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-x-hidden overflow-y-hidden overscroll-none bg-white select-none">
       <div className="flex items-center justify-between text-[0.72rem] font-black uppercase tracking-[0.16em] text-slate-500">
         <span>{leftHint}</span>
         <span>Swipe card</span>
@@ -194,13 +192,13 @@ export function SwipeCard({
       <div className="relative flex min-h-[18rem] flex-1 rounded-[2.3rem]">
         <div className="relative z-20 flex min-h-[18rem] flex-1">
           <div
-            ref={cardRef}
-            className="relative flex min-h-[18rem] flex-1 overflow-hidden rounded-[2rem] border-2 border-slate-900 bg-slate-50 px-5 py-6 touch-pan-y select-none"
+            className="relative flex min-h-[18rem] flex-1 overflow-hidden rounded-[2rem] border-2 border-slate-900 bg-slate-50 px-5 py-6 touch-none overscroll-none select-none"
             onPointerDown={(event) => {
               if (busy || phase === "exit-left" || phase === "exit-right") {
                 return;
               }
 
+              event.preventDefault();
               pointerIdRef.current = event.pointerId;
               startXRef.current = event.clientX;
               previousSampleRef.current = {
@@ -216,6 +214,7 @@ export function SwipeCard({
                 return;
               }
 
+              event.preventDefault();
               previousSampleRef.current = latestSampleRef.current;
               latestSampleRef.current = {
                 x: event.clientX,

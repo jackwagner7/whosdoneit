@@ -1,7 +1,7 @@
 "use client";
 
 import { PlayerBox } from "@/components/player-box";
-import { CountdownBadge } from "@/components/games/whosdoneit/room/countdown-badge";
+import { StageHeader } from "@/components/stage-header";
 
 type RevealTruthRow = {
   id: string;
@@ -33,10 +33,7 @@ export function RevealSummaryStage({
 
   return (
     <section className="card-enter -mx-[var(--card-padding)] flex min-h-0 min-w-0 flex-1 flex-col px-[var(--card-padding)] pb-5 pt-2">
-      <header className="shrink-0 flex items-center justify-between gap-3">
-        <p className="stage-heading">Reveal</p>
-        <CountdownBadge deadlineAt={deadlineAt} />
-      </header>
+      <StageHeader deadlineAt={deadlineAt} title="Reveal" />
       <p className="mt-3 rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-xl font-black text-slate-900 sm:text-2xl">
         {prompt}
       </p>

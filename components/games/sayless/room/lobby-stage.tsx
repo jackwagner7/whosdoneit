@@ -2,6 +2,7 @@
 
 import type { CSSProperties } from "react";
 import { PlayerBox } from "@/components/player-box";
+import { StageHeader } from "@/components/stage-header";
 import { SAY_LESS_TEAM_PALETTE } from "@/lib/games/sayless/game";
 import type { SayLessPlayer } from "@/types/sayless";
 
@@ -32,18 +33,11 @@ export function LobbyStage({
 }: LobbyStageProps) {
   return (
     <section className="card-enter -mx-[var(--card-padding)] flex min-h-0 min-w-0 flex-1 flex-col px-[var(--card-padding)] pb-5 pt-2">
-      <header className="shrink-0 flex items-start justify-between gap-2">
-        <div>
-          <p className="stage-heading">Lobby</p>
-        </div>
-        <p className="stage-subheading">{players.length} players</p>
-      </header>
-
-      {!canStart ? (
-        <p className="stage-subheading mt-3 shrink-0">
-          Need at least 1 player in every team to start.
-        </p>
-      ) : null}
+      <StageHeader
+        description={!canStart ? "Need at least 1 player in every team to start." : undefined}
+        title="Lobby"
+        trackingItems={[{ label: "Players", value: `${players.length}` }]}
+      />
 
       <div className="sayless-team-grid mt-3 min-h-0 flex-1 overflow-y-auto pr-1">
         {Array.from({ length: teamCount }, (_, teamIndex) => {

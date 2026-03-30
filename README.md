@@ -55,7 +55,7 @@ The migration files bootstrap the schema. The reseed file refreshes the Say Less
 
 ## Stuff I forget
 
-- npm run dev
-- npx start supabase
-- npx reset supabase
-- npx supabase db push
+npm run dev
+npx start supabase
+npx reset supabase
+npx supabase db push

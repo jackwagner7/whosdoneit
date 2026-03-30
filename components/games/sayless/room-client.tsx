@@ -13,22 +13,27 @@ import { SettingsSheet } from "@/components/games/sayless/room/settings-sheet";
 import { ProfileSettingsSheet } from "@/components/games/whosdoneit/room/profile-settings-sheet";
 import { getGameBySlug } from "@/lib/game-catalog";
 import {
+  addFakePlayers,
   continueFromRoundSummary,
   getDraftBatchForPlayer,
   getRoomSnapshotByCode,
   getRoundTeamScores,
   getTeamName,
   hasReadyTeams,
+  isTestBotName,
   joinRoom,
   maybeAdvanceGame,
   playAgainToLobby,
+  runTestBots,
   SAY_LESS_TEAM_PALETTE,
   shuffleTeams,
+  skipRound,
   startPlayerTurn,
   startGame,
   submitDraftDecision,
   submitTurnAction,
   subscribeToRoom,
+  toggleTurnPause,
   updatePlayerProfile,
   updateRoomSettings,
   updateTeamName,
@@ -155,6 +160,7 @@ function buildTeamSummaries(snapshot: SayLessSnapshot) {
       teamIndex,
       teamName: getTeamName(snapshot.room, teamIndex),
       color: SAY_LESS_TEAM_PALETTE[teamIndex]?.color ?? "#0f172a",
+      background: SAY_LESS_TEAM_PALETTE[teamIndex]?.background ?? "#f8fafc",
       roundScore: roundScores[teamIndex] ?? 0,
       totalScore: players.reduce((sum, player) => sum + player.score, 0),
       topPlayerName: topPlayer?.name ?? null,
@@ -183,6 +189,7 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
   const [pendingTurnActions, setPendingTurnActions] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsSaving, setSettingsSaving] = useState(false);
+  const [addingFakePlayers, setAddingFakePlayers] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
@@ -210,6 +217,7 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
   const refreshTimeoutRef = useRef<number | null>(null);
   const turnActionQueueRef = useRef<Promise<void>>(Promise.resolve());
   const attemptedAutoJoinRef = useRef(false);
+  const drivingTestBotsRef = useRef(false);
   const optimisticTurnStateRef = useRef({
     cardId: null as string | null,
     passedIds: [] as string[],
@@ -304,6 +312,22 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
 
     return snapshot.players.find((player) => player.id === playerId) ?? null;
   }, [playerId, snapshot]);
+
+  const hasTestBots = useMemo(
+    () => snapshot?.players.some((player) => isTestBotName(player.name)) ?? false,
+    [snapshot?.players],
+  );
+
+  const activePlayerIsTestBot = useMemo(() => {
+    if (!snapshot?.state.active_player_id) {
+      return false;
+    }
+
+    const activePlayer =
+      snapshot.players.find((player) => player.id === snapshot.state.active_player_id) ?? null;
+
+    return activePlayer ? isTestBotName(activePlayer.name) : false;
+  }, [snapshot]);
 
   const draftCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -535,6 +559,27 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
     }
   }, [loadSnapshot, me, settingsDraft, snapshot, teamNameDraft]);
 
+  const handleAddFakePlayers = useCallback(
+    async (count: number) => {
+      if (!snapshot || !me) {
+        return;
+      }
+
+      setAddingFakePlayers(true);
+      setActionError(null);
+
+      try {
+        await addFakePlayers(snapshot.room.id, me.id, count);
+        await loadSnapshot();
+      } catch (issue) {
+        setActionError(issue instanceof Error ? issue.message : "Could not add fake users.");
+      } finally {
+        setAddingFakePlayers(false);
+      }
+    },
+    [loadSnapshot, me, snapshot],
+  );
+
   const handleSaveProfile = useCallback(async () => {
     if (!snapshot || !me) {
       return;
@@ -709,6 +754,57 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
   ]);
 
   useEffect(() => {
+    if (
+      !snapshot ||
+      !me?.is_host ||
+      !hasTestBots ||
+      drivingTestBotsRef.current
+    ) {
+      return;
+    }
+
+    const shouldRun =
+      snapshot.room.phase === "drafting" ||
+      (
+        snapshot.room.phase === "playing" &&
+        activePlayerIsTestBot &&
+        typeof snapshot.state.paused_turn_seconds_remaining !== "number"
+      );
+
+    if (!shouldRun) {
+      return;
+    }
+
+    drivingTestBotsRef.current = true;
+    let launched = false;
+    const timeoutId = window.setTimeout(() => {
+      launched = true;
+      void runTestBots(snapshot.room.id, me.id)
+        .catch((issue) => {
+          setActionError(
+            issue instanceof Error ? issue.message : "Could not run fake users.",
+          );
+        })
+        .finally(() => {
+          drivingTestBotsRef.current = false;
+        });
+    }, snapshot.room.phase === "drafting" ? 120 : 260);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      if (!launched) {
+        drivingTestBotsRef.current = false;
+      }
+    };
+  }, [
+    activePlayerIsTestBot,
+    hasTestBots,
+    me?.id,
+    me?.is_host,
+    snapshot,
+  ]);
+
+  useEffect(() => {
     if (!loading && (error || !snapshot)) {
       router.replace("/");
     }
@@ -819,6 +915,8 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
     snapshot.roomCards.length >= totalDraftTarget;
   const activePlayer =
     snapshot.players.find((player) => player.id === snapshot.state.active_player_id) ?? null;
+  const turnPaused =
+    typeof snapshot.state.paused_turn_seconds_remaining === "number";
   const optimisticPassedSet = new Set(optimisticPassedCardIds);
   const optimisticClearedSet = new Set(optimisticClearedCardIds);
   const currentTurnCardId =
@@ -833,41 +931,58 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
     typeof me.team_index === "number" &&
     typeof activePlayer?.team_index === "number" &&
     me.team_index === activePlayer.team_index;
-  const turnStarted = Boolean((snapshot.state.turn_deadline_at || optimisticTurnCardId) && activeCard);
+  const turnStarted = Boolean(
+    activeCard &&
+      (
+        snapshot.state.turn_deadline_at ||
+        typeof snapshot.state.paused_turn_seconds_remaining === "number" ||
+        optimisticTurnCardId
+      ),
+  );
   const remainingCards = snapshot.roomCards.filter(
     (card) => getEffectiveCardStatus(card, optimisticPassedSet, optimisticClearedSet) !== "cleared",
   ).length;
-  const teamScorePills = teamSummaries.map((team) => ({
-    label: team.teamName,
-    score: team.totalScore,
-  }));
+  const teamScorePills = [...teamSummaries]
+    .sort(
+      (left, right) =>
+        right.totalScore - left.totalScore ||
+        left.teamName.localeCompare(right.teamName) ||
+        left.teamIndex - right.teamIndex,
+    )
+    .map((team) => ({
+      label: team.teamName,
+      score: team.totalScore,
+      color: team.color,
+      background: team.background,
+    }));
   const allowHostControls = me.is_host && snapshot.room.phase === "lobby";
-  const startTurnBusy = busyAction === "start-turn";
+  const playStageBusy = Boolean(busyAction) || pendingTurnActions > 0;
 
   return (
       <main className="app-page">
         <div className="app-page-card app-page-card-mobile-fill relative flex h-[calc(100svh-1.5rem)] max-h-[calc(100svh-1.5rem)] flex-col overflow-hidden sm:h-[80vh] sm:max-h-[80vh]">
         <AppBanner label={GAME?.name} />
 
-        <div className="flex min-h-0 flex-1 flex-col gap-3 pt-3">
-          <section className="-mx-[var(--card-padding)] border-b border-slate-200 px-[var(--card-padding)] pb-3">
+        <div className="flex min-h-0 flex-1 flex-col gap-2 pt-2">
+          <section className="-mx-[var(--card-padding)] border-b border-slate-200 px-[var(--card-padding)] pb-2">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                <p className="text-base font-black tracking-[0.08em] sm:text-lg">
-                  Code: {snapshot.room.code}
-                </p>
                 <button
-                  className="rounded-lg border border-slate-300 px-2 py-1 text-xs font-bold uppercase tracking-[0.08em] text-slate-700"
+                  aria-label={linkCopied ? "Room link copied" : "Copy room link"}
+                  className={`rounded-lg px-1 text-base font-black tracking-[0.08em] transition-colors sm:text-lg ${
+                    linkCopied ? "text-emerald-600" : "text-slate-950"
+                  }`}
                   onClick={() => void handleCopyRoomLink()}
+                  title={linkCopied ? "Copied" : "Click to copy room link"}
                   type="button"
                 >
-                  {linkCopied ? "Copied" : "Copy link"}
+                  {snapshot.room.code}
                 </button>
               </div>
               <div className="flex items-center gap-2">
                 <button
                   aria-label="Profile settings"
-                  className="rounded-xl border border-slate-300 px-3 py-2 text-2xl font-bold leading-none"
+                  className="rounded-lg border border-slate-300 px-2.75 py-1.75 text-xl font-bold leading-none"
                   onClick={openProfileSettings}
                   type="button"
                 >
@@ -875,7 +990,7 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
                 </button>
                 <button
                   aria-label="Room settings"
-                  className="rounded-xl border border-slate-300 px-3 py-2 text-2xl font-bold leading-none"
+                  className="rounded-lg border border-slate-300 px-2.75 py-1.75 text-xl font-bold leading-none"
                   onClick={() => {
                     setSettingsDraft({
                       teamCount: snapshot.room.team_count,
@@ -987,9 +1102,10 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
             <PlayingStage
               activePlayer={activePlayer}
               activeTeamName={activeTeamName}
-              busy={startTurnBusy}
+              busy={playStageBusy}
               card={me.id === activePlayer?.id ? activeCard : null}
               deadlineAt={snapshot.state.turn_deadline_at}
+              isHost={me.is_host}
               meIsActive={me.id === activePlayer?.id}
               onStartTurn={() =>
                 runAction("start-turn", async () => {
@@ -1002,14 +1118,26 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
                   await startPlayerTurn(snapshot.room.id, me.id);
                 })
               }
+              onSkipRound={() =>
+                runAction("skip-round", async () => {
+                  await skipRound(snapshot.room.id, me.id);
+                })
+              }
+              onTogglePause={() =>
+                runAction("toggle-turn-pause", async () => {
+                  await toggleTurnPause(snapshot.room.id, me.id);
+                })
+              }
               onCorrect={() => queueTurnAction("correct")}
               onPass={() => queueTurnAction("pass")}
+              pausedRemainingSeconds={snapshot.state.paused_turn_seconds_remaining}
               remainingCards={remainingCards}
               roundCount={snapshot.state.round_count}
               roundNumber={currentRoundNumber}
               sameTeamAsActive={Boolean(sameTeamAsActive)}
               teamScores={teamScorePills}
               totalCards={snapshot.roomCards.length}
+              turnPaused={turnPaused}
               turnStarted={turnStarted}
             />
           ) : null}
@@ -1048,9 +1176,12 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
         </div>
 
         <SettingsSheet
+          addingFakePlayers={addingFakePlayers}
+          allowFakePlayers={allowHostControls}
           allowHostControls={allowHostControls}
           cardsPerPlayer={settingsDraft.cardsPerPlayer}
           isHost={me.is_host}
+          onAddFakePlayers={handleAddFakePlayers}
           onCardsPerPlayerChange={(cardsPerPlayer) =>
             setSettingsDraft((current) => ({ ...current, cardsPerPlayer }))
           }
