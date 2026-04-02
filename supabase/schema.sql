@@ -10,7 +10,7 @@ create table if not exists public.rooms (
   current_prompt_index integer not null default 0,
   reveal_player_index integer not null default 0,
   reveal_truth_visible boolean not null default false,
-  prompt_seconds integer not null default 20,
+  prompt_seconds integer not null default 150,
   round_count integer not null default 1,
   answering_seconds integer not null default 25,
   guessing_seconds integer not null default 35,

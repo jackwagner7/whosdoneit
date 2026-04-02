@@ -23,7 +23,7 @@ const MAX_ROUNDS = 10;
 const ROUND_PROMPT_FACTOR = 1000;
 
 const DEFAULT_ROOM_SETTINGS: RoomSettings = {
-  promptSeconds: 20,
+  promptSeconds: 150,
   roundCount: 1,
   answeringSeconds: 25,
   guessingSeconds: 35,

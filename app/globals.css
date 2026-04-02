@@ -40,20 +40,6 @@ body {
   animation: card-enter 220ms ease-out;
 }
 
-@keyframes timer-urgent {
-  0%,
-  100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.04);
-  }
-}
-
-.timer-urgent {
-  animation: timer-urgent 700ms ease-in-out infinite;
-}
-
 .scrollbar-hide {
   -ms-overflow-style: none;
   scrollbar-width: none;

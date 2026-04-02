@@ -3,7 +3,7 @@ import type { RoomSettings } from "@/types/whosdoneit";
 const HOST_SETTINGS_KEY = "hostRoomSettings";
 
 const DEFAULT_HOST_SETTINGS: RoomSettings = {
-  promptSeconds: 20,
+  promptSeconds: 150,
   roundCount: 1,
   answeringSeconds: 25,
   guessingSeconds: 35,

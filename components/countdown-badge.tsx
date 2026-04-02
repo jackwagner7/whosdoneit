@@ -7,6 +7,7 @@ type CountdownBadgeProps = {
   paused?: boolean;
   pausedRemainingSeconds?: number | null;
   onClick?: (() => void) | undefined;
+  variant?: "default" | "button-dark";
 };
 
 function ClockIcon() {
@@ -62,6 +63,7 @@ export function CountdownBadge({
   paused = false,
   pausedRemainingSeconds = null,
   onClick,
+  variant = "default",
 }: CountdownBadgeProps) {
   const [now, setNow] = useState(() => Date.now());
 
@@ -80,19 +82,33 @@ export function CountdownBadge({
   }
 
   const isUrgent = !paused && remaining <= 5;
-  const className = `inline-flex min-w-[3.25rem] items-center justify-center gap-1 rounded-full px-3 py-1 text-sm font-bold tabular-nums ${
-    paused
-      ? "bg-amber-100 text-amber-900"
-      : isUrgent
-        ? "timer-urgent bg-rose-500 text-white"
+
+  if (variant === "button-dark") {
+    return (
+      <div
+        className={`flex h-full w-[4.75rem] items-center justify-center border-l px-3 text-base font-bold tabular-nums ${
+          paused
+            ? "border-amber-200/50 text-amber-100"
+            : "border-white/20 text-white"
+        }`}
+      >
+        <span className={isUrgent ? "text-rose-400" : ""}>{remaining}</span>
+      </div>
+    );
+  }
+
+  const className =
+    `inline-flex min-w-[3.25rem] items-center justify-center gap-1 rounded-full px-3 py-1 text-base font-bold tabular-nums ${
+      paused
+        ? "bg-amber-100 text-amber-900"
         : "bg-slate-100 text-slate-950"
-  } ${onClick ? "cursor-pointer" : ""}`;
+    } ${onClick ? "cursor-pointer" : ""}`;
   const icon = paused ? <PauseIcon /> : <ClockIcon />;
 
   if (onClick) {
     return (
       <button className={className} onClick={onClick} type="button">
-        <span>{remaining}</span>
+        <span className={isUrgent ? "text-rose-700" : ""}>{remaining}</span>
         {icon}
       </button>
     );
@@ -100,7 +116,7 @@ export function CountdownBadge({
 
   return (
     <div className={className}>
-      <span>{remaining}</span>
+      <span className={isUrgent ? "text-rose-700" : ""}>{remaining}</span>
       {icon}
     </div>
   );

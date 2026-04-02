@@ -646,7 +646,7 @@ declare
   v_name text := public.whd_normalize_name(host_name);
   v_color text := public.whd_normalize_color(player_color);
   v_emoji text := public.whd_normalize_emoji(player_emoji);
-  v_prompt_seconds integer := least(greatest(coalesce(prompt_seconds, 20), 5), 180);
+  v_prompt_seconds integer := least(greatest(coalesce(prompt_seconds, 150), 5), 180);
   v_round_count integer := least(greatest(coalesce(round_count, 1), 1), 10);
   v_answering_seconds integer := least(greatest(coalesce(answering_seconds, 25), 5), 180);
   v_guessing_seconds integer := least(greatest(coalesce(guessing_seconds, 35), 5), 180);

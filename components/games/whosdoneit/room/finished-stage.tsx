@@ -1,7 +1,9 @@
 "use client";
 
 import { PlayerBox } from "@/components/player-box";
+import { StageFooter, StageFooterMessage } from "@/components/stage-footer";
 import { StageHeader } from "@/components/stage-header";
+import { StageShell } from "@/components/stage-shell";
 import type { Player } from "@/types/whosdoneit";
 
 type FinishedStageProps = {
@@ -67,7 +69,7 @@ export function FinishedStage({
   const placementRows = buildPlacementRows(players);
 
   return (
-    <section className="card-enter -mx-[var(--card-padding)] flex min-h-0 min-w-0 flex-1 flex-col px-[var(--card-padding)] pb-5 pt-2">
+    <StageShell>
       <StageHeader
         title="Final standings"
         trackingItems={[{ label: "Players", value: `${players.length}` }]}
@@ -107,7 +109,7 @@ export function FinishedStage({
         </ol>
       </div>
       {isHost ? (
-        <div className="mt-3 shrink-0 border-t border-slate-200 pt-3">
+        <StageFooter>
           <button
             className="w-full rounded-2xl bg-black px-4 py-3 text-xl font-bold text-white disabled:opacity-60"
             disabled={busy}
@@ -116,12 +118,10 @@ export function FinishedStage({
           >
             {busy ? "..." : "Play Again"}
           </button>
-        </div>
+        </StageFooter>
       ) : (
-        <p className="stage-subheading mt-3 shrink-0 border-t border-slate-200 pt-3 text-center">
-          Waiting for host to play again.
-        </p>
+        <StageFooterMessage>Waiting for host to play again.</StageFooterMessage>
       )}
-    </section>
+    </StageShell>
   );
 }

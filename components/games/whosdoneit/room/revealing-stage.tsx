@@ -1,8 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { CountdownBadge } from "@/components/countdown-badge";
 import { PlayerBox } from "@/components/player-box";
+import { StageFooter, StageFooterMessage } from "@/components/stage-footer";
 import { StageHeader } from "@/components/stage-header";
+import { StageShell } from "@/components/stage-shell";
 
 const REVEAL_WAIT_MS = {
   quick: 240,
@@ -354,8 +357,8 @@ export function RevealingStage({
       : "min-w-0 rounded-2xl border border-rose-200 bg-rose-50 p-3";
 
   return (
-    <section className="card-enter -mx-[var(--card-padding)] flex min-h-0 min-w-0 flex-1 flex-col px-[var(--card-padding)] pb-5 pt-2">
-      <StageHeader deadlineAt={truthShown ? deadlineAt : null} title="Trial" />
+    <StageShell>
+      <StageHeader deadlineAt={truthShown && !canControl ? deadlineAt : null} title="Trial" />
       <p className="mt-3 rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-xl font-black text-slate-900 sm:text-2xl">
         {prompt}
       </p>
@@ -404,23 +407,31 @@ export function RevealingStage({
         </div>
       </div>
       {truthShown && canControl ? (
-        <div className="mt-3 shrink-0 border-t border-slate-200 pt-3">
+        <StageFooter>
           <button
-            className="w-full rounded-2xl bg-black px-4 py-3 text-xl font-bold text-white disabled:opacity-60"
+            className="grid w-full grid-cols-[4.75rem_1fr_4.75rem] items-stretch overflow-hidden rounded-2xl bg-black text-xl font-bold text-white disabled:opacity-60"
             disabled={busy}
             onClick={() => void onNext()}
             type="button"
           >
-            {busy ? "..." : "Next"}
+            <span aria-hidden="true" />
+            <span className="flex items-center justify-center px-4 py-3 text-center">
+              {busy ? "..." : "Next"}
+            </span>
+            {!busy ? (
+              <CountdownBadge deadlineAt={deadlineAt} variant="button-dark" />
+            ) : (
+              <span aria-hidden="true" className="border-l border-white/20" />
+            )}
           </button>
-        </div>
+        </StageFooter>
       ) : (
-        <p className="stage-subheading mt-3 shrink-0 border-t border-slate-200 pt-3 text-center">
+        <StageFooterMessage>
           {truthShown
             ? `Waiting for ${target.name} ${target.emoji}`
             : "Revealing guesses..."}
-        </p>
+        </StageFooterMessage>
       )}
-    </section>
+    </StageShell>
   );
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { StageShell } from "@/components/stage-shell";
 import { StageHeader } from "@/components/stage-header";
 import type { SayLessCard } from "@/types/sayless";
 import { SwipeCard } from "@/components/games/sayless/room/swipe-card";
@@ -11,6 +12,7 @@ type DraftingStageProps = {
   targetCount: number;
   totalDrafted: number;
   totalTarget: number;
+  duplicateCount: number;
   doneDrafting: boolean;
   busy: boolean;
   loadingCard: boolean;
@@ -24,6 +26,7 @@ export function DraftingStage({
   targetCount,
   totalDrafted,
   totalTarget,
+  duplicateCount,
   doneDrafting,
   busy,
   loadingCard,
@@ -34,10 +37,11 @@ export function DraftingStage({
   const trackingItems: TrackingStatItem[] = [
     { label: "Your picks", value: `${draftedCount}/${targetCount}` },
     { label: "Room deck", value: `${totalDrafted}/${totalTarget}` },
+    { label: "Dupes", value: String(duplicateCount) },
   ];
 
   return (
-    <section className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-4">
+    <StageShell className="overflow-y-auto">
       <StageHeader title="Draft" trackingItems={trackingItems} />
 
       {showLoadingPlaceholder ? (
@@ -123,6 +127,6 @@ export function DraftingStage({
           </div>
         </div>
       ) : null}
-    </section>
+    </StageShell>
   );
 }

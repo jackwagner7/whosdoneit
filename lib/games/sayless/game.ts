@@ -8,6 +8,7 @@ import { PLAYER_COLOR_POOL } from "@/lib/player-color-pool";
 import { supabase } from "@/lib/supabase";
 import type {
   SayLessCard,
+  SayLessDraftBatchResponse,
   SayLessDraftRejection,
   SayLessPlayer,
   SayLessRoom,
@@ -570,10 +571,30 @@ export async function startGame(roomId: string, playerId: string) {
 }
 
 export async function getDraftBatchForPlayer(roomId: string, playerId: string) {
-  return callRpc<SayLessCard[]>("sl_get_draft_batch_for_player", {
-    p_room_id: roomId,
-    p_player_id: playerId,
+  const response = await fetch("/api/sayless/draft-batch", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      roomId,
+      playerId,
+    }),
   });
+
+  const payload = (await response.json()) as
+    | SayLessDraftBatchResponse
+    | { error?: string };
+
+  if (!response.ok) {
+    throw new Error(
+      "error" in payload && payload.error
+        ? payload.error
+        : "Could not load draft batch.",
+    );
+  }
+
+  return payload as SayLessDraftBatchResponse;
 }
 
 export async function submitDraftDecision(

@@ -1,5 +1,7 @@
 "use client";
 
+import { StageFooter, StageFooterMessage } from "@/components/stage-footer";
+import { StageShell } from "@/components/stage-shell";
 import { StageHeader } from "@/components/stage-header";
 
 type TeamSummary = {
@@ -25,7 +27,7 @@ export function FinishedStage({
   onPlayAgain,
 }: FinishedStageProps) {
   return (
-    <section className="card-enter flex min-h-0 flex-1 flex-col overflow-y-auto pb-4">
+    <StageShell className="overflow-y-auto">
       <StageHeader
         description="The full deck is cleared. Totals stay visible here until the host resets to the lobby."
         title="Final Results"
@@ -59,19 +61,21 @@ export function FinishedStage({
       </div>
 
       {isHost ? (
-        <button
-          className="mt-4 rounded-2xl bg-black px-4 py-4 text-base font-bold text-white disabled:opacity-50"
-          disabled={busy}
-          onClick={() => void onPlayAgain()}
-          type="button"
-        >
-          {busy ? "..." : "Back to lobby"}
-        </button>
+        <StageFooter>
+          <button
+            className="w-full rounded-2xl bg-black px-4 py-4 text-base font-bold text-white disabled:opacity-50"
+            disabled={busy}
+            onClick={() => void onPlayAgain()}
+            type="button"
+          >
+            {busy ? "..." : "Back to lobby"}
+          </button>
+        </StageFooter>
       ) : (
-        <p className="mt-4 text-sm font-semibold text-slate-500">
+        <StageFooterMessage className="text-sm font-semibold text-slate-500">
           Waiting for the host to send everyone back to the lobby.
-        </p>
+        </StageFooterMessage>
       )}
-    </section>
+    </StageShell>
   );
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { StageShell } from "@/components/stage-shell";
 import { StageHeader } from "@/components/stage-header";
 
 type SubmissionWaitingStageProps = {
@@ -16,7 +17,7 @@ export function SubmissionWaitingStage({
   const allSubmitted = totalCount > 0 && submittedCount >= totalCount;
 
   return (
-    <section className="card-enter -mx-[var(--card-padding)] flex min-h-0 min-w-0 flex-1 flex-col px-[var(--card-padding)] pb-5 pt-2">
+    <StageShell>
       <StageHeader
         description={
           allSubmitted
@@ -39,6 +40,6 @@ export function SubmissionWaitingStage({
           </div>
         ) : null}
       </div>
-    </section>
+    </StageShell>
   );
 }

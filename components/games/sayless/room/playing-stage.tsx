@@ -1,8 +1,8 @@
 "use client";
 
-import { useRef, useState, type PointerEvent } from "react";
-
 import { PlayerBox } from "@/components/player-box";
+import { StageFooter } from "@/components/stage-footer";
+import { StageShell } from "@/components/stage-shell";
 import { StageHeader } from "@/components/stage-header";
 import { SwipeCard } from "@/components/games/sayless/room/swipe-card";
 import type { TrackingStatItem } from "@/components/tracking-stat";
@@ -23,12 +23,6 @@ type PlayingStageProps = {
   roundCount: number;
   remainingCards: number;
   totalCards: number;
-  teamScores: Array<{
-    label: string;
-    score: number;
-    color: string;
-    background: string;
-  }>;
   busy: boolean;
   onStartTurn: () => Promise<void>;
   onTogglePause: () => Promise<void>;
@@ -96,7 +90,6 @@ export function PlayingStage({
   roundCount,
   remainingCards,
   totalCards,
-  teamScores,
   busy,
   onStartTurn,
   onTogglePause,
@@ -104,14 +97,6 @@ export function PlayingStage({
   onPass,
   onCorrect,
 }: PlayingStageProps) {
-  const scoreStripRef = useRef<HTMLDivElement | null>(null);
-  const dragStateRef = useRef<{
-    pointerId: number;
-    startX: number;
-    startScrollLeft: number;
-  } | null>(null);
-  const [isDraggingScores, setIsDraggingScores] = useState(false);
-
   const trackingItems: TrackingStatItem[] = [
     { label: "Cards left", value: `${remainingCards}/${totalCards}` },
     { label: "Rounds", value: `${roundNumber}/${roundCount}` },
@@ -139,53 +124,8 @@ export function PlayingStage({
       ]
     : [];
 
-  function handleScoreStripPointerDown(event: PointerEvent<HTMLDivElement>) {
-    if (event.pointerType !== "mouse" || event.button !== 0) {
-      return;
-    }
-
-    const strip = scoreStripRef.current;
-    if (!strip || strip.scrollWidth <= strip.clientWidth) {
-      return;
-    }
-
-    dragStateRef.current = {
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startScrollLeft: strip.scrollLeft,
-    };
-    setIsDraggingScores(true);
-    strip.setPointerCapture(event.pointerId);
-    event.preventDefault();
-  }
-
-  function handleScoreStripPointerMove(event: PointerEvent<HTMLDivElement>) {
-    const dragState = dragStateRef.current;
-    const strip = scoreStripRef.current;
-    if (!dragState || !strip || dragState.pointerId !== event.pointerId) {
-      return;
-    }
-
-    strip.scrollLeft = dragState.startScrollLeft - (event.clientX - dragState.startX);
-    event.preventDefault();
-  }
-
-  function endScoreStripDrag(event: PointerEvent<HTMLDivElement>) {
-    const strip = scoreStripRef.current;
-    if (!dragStateRef.current || dragStateRef.current.pointerId !== event.pointerId) {
-      return;
-    }
-
-    dragStateRef.current = null;
-    setIsDraggingScores(false);
-
-    if (strip?.hasPointerCapture(event.pointerId)) {
-      strip.releasePointerCapture(event.pointerId);
-    }
-  }
-
   return (
-    <section className="relative flex min-h-0 flex-1 flex-col overflow-y-auto pb-4">
+    <StageShell className="relative overflow-y-auto">
       <StageHeader
         deadlineAt={turnStarted && !turnPaused ? deadlineAt : null}
         description={
@@ -200,33 +140,6 @@ export function PlayingStage({
         title={`Round ${roundNumber}`}
         trackingItems={trackingItems}
       />
-
-      <div
-        className={`scrollbar-hide mt-4 overflow-x-auto overscroll-x-contain pb-1 select-none ${
-          isDraggingScores ? "cursor-grabbing" : "cursor-grab"
-        }`}
-        onPointerCancel={endScoreStripDrag}
-        onPointerDown={handleScoreStripPointerDown}
-        onPointerMove={handleScoreStripPointerMove}
-        onPointerUp={endScoreStripDrag}
-        ref={scoreStripRef}
-      >
-        <div className="flex w-max min-w-full flex-nowrap gap-2">
-          {teamScores.map((team) => (
-            <div
-              className="flex-none rounded-full border px-3 py-2 text-sm font-bold whitespace-nowrap"
-              key={team.label}
-              style={{
-                borderColor: team.color,
-                backgroundColor: team.background,
-                color: team.color,
-              }}
-            >
-              {team.label}: {team.score}
-            </div>
-          ))}
-        </div>
-      </div>
 
       {!turnStarted ? (
         <div className="mt-5 flex min-h-0 flex-1 flex-col">
@@ -250,7 +163,7 @@ export function PlayingStage({
           </div>
 
           {meIsActive ? (
-            <div className="mt-4 shrink-0 border-t border-slate-200 pt-4">
+            <StageFooter className="pt-4">
               <button
                 className="w-full rounded-2xl bg-black px-4 py-3 text-base font-bold text-white disabled:opacity-50"
                 disabled={busy}
@@ -259,7 +172,7 @@ export function PlayingStage({
               >
                 {busy ? "..." : "Start"}
               </button>
-            </div>
+            </StageFooter>
           ) : null}
         </div>
       ) : null}
@@ -347,6 +260,6 @@ export function PlayingStage({
           </div>
         </div>
       ) : null}
-    </section>
+    </StageShell>
   );
 }

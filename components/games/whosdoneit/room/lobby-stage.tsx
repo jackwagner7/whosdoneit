@@ -1,7 +1,9 @@
 "use client";
 
 import { PlayerBox } from "@/components/player-box";
+import { StageFooter, StageFooterMessage } from "@/components/stage-footer";
 import { StageHeader } from "@/components/stage-header";
+import { StageShell } from "@/components/stage-shell";
 import type { Player } from "@/types/whosdoneit";
 
 type LobbyStageProps = {
@@ -20,7 +22,7 @@ export function LobbyStage({
   onStart,
 }: LobbyStageProps) {
   return (
-    <section className="card-enter -mx-[var(--card-padding)] flex min-h-0 min-w-0 flex-1 flex-col px-[var(--card-padding)] pb-5 pt-2">
+    <StageShell>
       <StageHeader
         description={!canStart ? "Need at least 2 players to start." : undefined}
         title="Lobby"
@@ -43,7 +45,7 @@ export function LobbyStage({
       </div>
 
       {isHost ? (
-        <div className="mt-3 shrink-0 border-t border-slate-200 pt-3">
+        <StageFooter>
           <button
             className="w-full rounded-2xl bg-black px-5 py-3 text-xl font-bold text-white disabled:opacity-50 sm:text-2xl"
             disabled={!canStart || busy}
@@ -52,12 +54,12 @@ export function LobbyStage({
           >
             {busy ? "..." : "Start"}
           </button>
-        </div>
+        </StageFooter>
       ) : (
-        <p className="mt-3 shrink-0 border-t border-slate-200 pt-3 text-sm font-semibold text-slate-500">
+        <StageFooterMessage className="text-sm font-semibold text-slate-500">
           Waiting for host to start.
-        </p>
+        </StageFooterMessage>
       )}
-    </section>
+    </StageShell>
   );
 }

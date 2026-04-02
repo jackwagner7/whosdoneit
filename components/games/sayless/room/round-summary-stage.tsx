@@ -1,5 +1,7 @@
 "use client";
 
+import { StageFooter, StageFooterMessage } from "@/components/stage-footer";
+import { StageShell } from "@/components/stage-shell";
 import { StageHeader } from "@/components/stage-header";
 
 type TeamSummary = {
@@ -33,7 +35,7 @@ export function RoundSummaryStage({
   onContinue,
 }: RoundSummaryStageProps) {
   return (
-    <section className="card-enter flex min-h-0 flex-1 flex-col overflow-y-auto pb-4">
+    <StageShell className="overflow-y-auto">
       <StageHeader
         description={
           isFinalRound
@@ -91,19 +93,21 @@ export function RoundSummaryStage({
       </div>
 
       {isHost ? (
-        <button
-          className="mt-4 rounded-2xl bg-black px-4 py-4 text-base font-bold text-white disabled:opacity-50"
-          disabled={busy}
-          onClick={() => void onContinue()}
-          type="button"
-        >
-          {busy ? "..." : isFinalRound ? "Lock final results" : `Start round ${Math.min(roundNumber + 1, roundCount)}`}
-        </button>
+        <StageFooter>
+          <button
+            className="w-full rounded-2xl bg-black px-4 py-4 text-base font-bold text-white disabled:opacity-50"
+            disabled={busy}
+            onClick={() => void onContinue()}
+            type="button"
+          >
+            {busy ? "..." : isFinalRound ? "Lock final results" : `Start round ${Math.min(roundNumber + 1, roundCount)}`}
+          </button>
+        </StageFooter>
       ) : (
-        <p className="mt-4 text-sm font-semibold text-slate-500">
+        <StageFooterMessage className="text-sm font-semibold text-slate-500">
           Waiting for the host to continue.
-        </p>
+        </StageFooterMessage>
       )}
-    </section>
+    </StageShell>
   );
 }

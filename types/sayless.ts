@@ -33,6 +33,9 @@ export type SayLessCard = {
   description: string;
   points: number;
   created_at: string;
+  card_source?: "base" | "generated";
+  generated_room_id?: string | null;
+  generated_for_player_id?: string | null;
 };
 
 export type SayLessPlayer = {
@@ -116,4 +119,9 @@ export type SayLessRoomSettings = {
   cardsPerPlayer: number;
   roundCount: number;
   turnSeconds: number;
+};
+
+export type SayLessDraftBatchResponse = {
+  cards: SayLessCard[];
+  duplicateCount: number;
 };

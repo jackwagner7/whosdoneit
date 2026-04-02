@@ -4,11 +4,11 @@ alter table public.rooms
 
 update public.rooms
 set
-  prompt_seconds = coalesce(prompt_seconds, 20),
+  prompt_seconds = coalesce(prompt_seconds, 150),
   round_count = coalesce(round_count, 1);
 
 alter table public.rooms
-  alter column prompt_seconds set default 20,
+  alter column prompt_seconds set default 150,
   alter column prompt_seconds set not null,
   alter column round_count set default 1,
   alter column round_count set not null;

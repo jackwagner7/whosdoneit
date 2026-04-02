@@ -16,7 +16,7 @@ type SwipeCardProps = {
 };
 
 // Main drag distance needed for a normal swipe commit.
-const SWIPE_THRESHOLD = 55;
+const SWIPE_THRESHOLD = 20;
 // If the card has reached this fraction of the threshold, releasing still commits
 // even when the finger is no longer moving.
 const STATIONARY_COMMIT_RATIO = 3;

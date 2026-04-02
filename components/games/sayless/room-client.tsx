@@ -59,7 +59,12 @@ import {
   setStoredPlayerPreferences,
 } from "@/lib/player-preferences";
 import { ROOM_LOADING_LABEL } from "@/lib/site-config";
-import type { SayLessCard, SayLessRoomSettings, SayLessSnapshot } from "@/types/sayless";
+import type {
+  SayLessCard,
+  SayLessDraftBatchResponse,
+  SayLessRoomSettings,
+  SayLessSnapshot,
+} from "@/types/sayless";
 
 const GAME = getGameBySlug("sayless");
 
@@ -176,6 +181,7 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
   const [snapshot, setSnapshot] = useState<SayLessSnapshot | null>(initialSnapshot);
   const [draftHand, setDraftHand] = useState<SayLessCard[]>([]);
   const [draftBatchLoading, setDraftBatchLoading] = useState(false);
+  const [draftDuplicateCount, setDraftDuplicateCount] = useState(0);
   const [loading, setLoading] = useState(initialSnapshot === null);
   const [readyForJoinGate, setReadyForJoinGate] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -217,6 +223,7 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
   const refreshTimeoutRef = useRef<number | null>(null);
   const turnActionQueueRef = useRef<Promise<void>>(Promise.resolve());
   const attemptedAutoJoinRef = useRef(false);
+  const latestSnapshotRequestIdRef = useRef(0);
   const drivingTestBotsRef = useRef(false);
   const optimisticTurnStateRef = useRef({
     cardId: null as string | null,
@@ -226,20 +233,33 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
 
   const loadSnapshot = useCallback(
     async (showSpinner = false) => {
+      const requestId = latestSnapshotRequestIdRef.current + 1;
+      latestSnapshotRequestIdRef.current = requestId;
+
       if (showSpinner) {
         setLoading(true);
       }
 
       try {
         const next = await getRoomSnapshotByCode(normalizedCode);
+        if (requestId !== latestSnapshotRequestIdRef.current) {
+          return;
+        }
+
         setSnapshot(next);
         setError(null);
       } catch (loadError) {
+        if (requestId !== latestSnapshotRequestIdRef.current) {
+          return;
+        }
+
         const message =
           loadError instanceof Error ? loadError.message : "Could not load room.";
         setError(message);
       } finally {
-        setLoading(false);
+        if (requestId === latestSnapshotRequestIdRef.current) {
+          setLoading(false);
+        }
       }
     },
     [normalizedCode],
@@ -700,6 +720,7 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
     if (!snapshot || !draftRoomId || !draftPlayerId || draftPhase !== "drafting") {
       setDraftHand([]);
       setDraftBatchLoading(false);
+      setDraftDuplicateCount(0);
       return;
     }
 
@@ -711,6 +732,7 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
     if (doneDrafting) {
       setDraftHand([]);
       setDraftBatchLoading(false);
+      setDraftDuplicateCount(0);
       return;
     }
 
@@ -722,12 +744,13 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
     setDraftBatchLoading(true);
 
     void getDraftBatchForPlayer(draftRoomId, draftPlayerId)
-      .then((cards) => {
+      .then((result: SayLessDraftBatchResponse) => {
         if (!active) {
           return;
         }
 
-        setDraftHand(cards);
+        setDraftHand(result.cards);
+        setDraftDuplicateCount(result.duplicateCount);
         setDraftBatchLoading(false);
       })
       .catch((issue) => {
@@ -737,6 +760,7 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
 
         setDraftHand([]);
         setDraftBatchLoading(false);
+        setDraftDuplicateCount(0);
         setActionError(issue instanceof Error ? issue.message : "Could not load hand.");
       });
 
@@ -942,19 +966,6 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
   const remainingCards = snapshot.roomCards.filter(
     (card) => getEffectiveCardStatus(card, optimisticPassedSet, optimisticClearedSet) !== "cleared",
   ).length;
-  const teamScorePills = [...teamSummaries]
-    .sort(
-      (left, right) =>
-        right.totalScore - left.totalScore ||
-        left.teamName.localeCompare(right.teamName) ||
-        left.teamIndex - right.teamIndex,
-    )
-    .map((team) => ({
-      label: team.teamName,
-      score: team.totalScore,
-      color: team.color,
-      background: team.background,
-    }));
   const allowHostControls = me.is_host && snapshot.room.phase === "lobby";
   const playStageBusy = Boolean(busyAction) || pendingTurnActions > 0;
 
@@ -1047,6 +1058,7 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
               card={draftCard}
               doneDrafting={doneDrafting}
               draftedCount={myDraftCount}
+              duplicateCount={draftDuplicateCount}
               loadingCard={draftBatchLoading}
               onKeep={() =>
                 runAction("draft-keep", async () => {
@@ -1135,7 +1147,6 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
               roundCount={snapshot.state.round_count}
               roundNumber={currentRoundNumber}
               sameTeamAsActive={Boolean(sameTeamAsActive)}
-              teamScores={teamScorePills}
               totalCards={snapshot.roomCards.length}
               turnPaused={turnPaused}
               turnStarted={turnStarted}

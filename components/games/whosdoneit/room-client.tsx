@@ -117,26 +117,40 @@ export function RoomClient({ code, initialSnapshot = null }: RoomClientProps) {
     }),
   );
   const attemptedAutoJoinRef = useRef(false);
+  const latestSnapshotRequestIdRef = useRef(0);
   const [settingsDraft, setSettingsDraft] = useState<SettingsDraft>({
     ...getDefaultHostSettings(),
   });
 
   const loadSnapshot = useCallback(
     async (showSpinner = false) => {
+      const requestId = latestSnapshotRequestIdRef.current + 1;
+      latestSnapshotRequestIdRef.current = requestId;
+
       if (showSpinner) {
         setLoading(true);
       }
 
       try {
         const next = await getGameSnapshotByCode(normalizedCode);
+        if (requestId !== latestSnapshotRequestIdRef.current) {
+          return;
+        }
+
         setSnapshot(next);
         setError(null);
       } catch (loadError) {
+        if (requestId !== latestSnapshotRequestIdRef.current) {
+          return;
+        }
+
         const message =
           loadError instanceof Error ? loadError.message : "Could not load room.";
         setError(message);
       } finally {
-        setLoading(false);
+        if (requestId === latestSnapshotRequestIdRef.current) {
+          setLoading(false);
+        }
       }
     },
     [normalizedCode],

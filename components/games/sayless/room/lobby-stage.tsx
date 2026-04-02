@@ -2,7 +2,9 @@
 
 import type { CSSProperties } from "react";
 import { PlayerBox } from "@/components/player-box";
+import { StageFooter, StageFooterMessage } from "@/components/stage-footer";
 import { StageHeader } from "@/components/stage-header";
+import { StageShell } from "@/components/stage-shell";
 import { SAY_LESS_TEAM_PALETTE } from "@/lib/games/sayless/game";
 import type { SayLessPlayer } from "@/types/sayless";
 
@@ -32,7 +34,7 @@ export function LobbyStage({
   onChooseTeam,
 }: LobbyStageProps) {
   return (
-    <section className="card-enter -mx-[var(--card-padding)] flex min-h-0 min-w-0 flex-1 flex-col px-[var(--card-padding)] pb-5 pt-2">
+    <StageShell>
       <StageHeader
         description={!canStart ? "Need at least 1 player in every team to start." : undefined}
         title="Lobby"
@@ -95,7 +97,7 @@ export function LobbyStage({
       </div>
 
       {isHost ? (
-        <div className="mt-3 shrink-0 border-t border-slate-200 pt-3">
+        <StageFooter>
           <div className="grid grid-cols-2 gap-2">
             <button
               className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-base font-bold disabled:opacity-50 sm:text-lg"
@@ -114,12 +116,12 @@ export function LobbyStage({
               {busy ? "..." : "Start"}
             </button>
           </div>
-        </div>
+        </StageFooter>
       ) : (
-        <p className="mt-3 shrink-0 border-t border-slate-200 pt-3 text-sm font-semibold text-slate-500">
+        <StageFooterMessage className="text-sm font-semibold text-slate-500">
           Waiting for host to start.
-        </p>
+        </StageFooterMessage>
       )}
-    </section>
+    </StageShell>
   );
 }
