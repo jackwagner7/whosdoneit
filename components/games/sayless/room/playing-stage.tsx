@@ -1,5 +1,7 @@
 "use client";
 
+import type { CSSProperties } from "react";
+import { CountdownBadge } from "@/components/countdown-badge";
 import { PlayerBox } from "@/components/player-box";
 import { StageFooter } from "@/components/stage-footer";
 import { StageShell } from "@/components/stage-shell";
@@ -11,10 +13,16 @@ import type { SayLessPlayer, SayLessRoomCard } from "@/types/sayless";
 type PlayingStageProps = {
   activePlayer: SayLessPlayer | null;
   activeTeamName: string;
+  activeTeamColor: string;
+  activeTeamBackground: string;
+  successfulCards: Array<{
+    id: string;
+    title: string;
+    points: number;
+  }>;
   deadlineAt: string | null;
   isHost: boolean;
   meIsActive: boolean;
-  sameTeamAsActive: boolean;
   turnStarted: boolean;
   turnPaused: boolean;
   pausedRemainingSeconds: number | null;
@@ -78,10 +86,12 @@ function SkipIcon({ className = "h-5 w-5" }: { className?: string }) {
 export function PlayingStage({
   activePlayer,
   activeTeamName,
+  activeTeamColor,
+  activeTeamBackground,
+  successfulCards,
   deadlineAt,
   isHost,
   meIsActive,
-  sameTeamAsActive,
   turnStarted,
   turnPaused,
   pausedRemainingSeconds,
@@ -98,65 +108,49 @@ export function PlayingStage({
   onCorrect,
 }: PlayingStageProps) {
   const trackingItems: TrackingStatItem[] = [
-    { label: "Cards left", value: `${remainingCards}/${totalCards}` },
     { label: "Rounds", value: `${roundNumber}/${roundCount}` },
+    { label: "Cards left", value: `${remainingCards}/${totalCards}` },
   ];
   const canControlTurn = turnStarted && (meIsActive || isHost);
-  const canUseTimerActions = canControlTurn && !turnPaused;
-  const timerActions = canUseTimerActions
-    ? [
-        {
-          label: "Pause",
-          icon: <PauseIcon />,
-          onSelect: () => {
-            void onTogglePause();
-          },
-          disabled: busy,
-        },
-        {
-          label: "Skip round",
-          icon: <SkipIcon />,
-          onSelect: () => {
-            void onSkipRound();
-          },
-          disabled: busy,
-        },
-      ]
-    : [];
+  const canPauseTurn = canControlTurn && !turnPaused;
 
   return (
     <StageShell className="relative overflow-y-auto">
       <StageHeader
-        deadlineAt={turnStarted && !turnPaused ? deadlineAt : null}
-        description={
-          activePlayer
-            ? `${activePlayer.name} is up for ${activeTeamName}.`
-            : "Waiting for the next turn to start."
-        }
-        pausedRemainingSeconds={turnPaused ? pausedRemainingSeconds : null}
-        reserveTimerSpace
-        timerPaused={turnPaused}
-        timerActions={timerActions}
         title={`Round ${roundNumber}`}
         trackingItems={trackingItems}
       />
 
       {!turnStarted ? (
         <div className="mt-5 flex min-h-0 flex-1 flex-col">
-          <div className="flex flex-1 flex-col items-center justify-center rounded-3xl border border-slate-200 bg-slate-50 px-5 py-6">
-            <p className="text-sm font-black uppercase tracking-[0.16em] text-slate-500">
-              Next:
-            </p>
+          <div className="flex flex-1 flex-col items-center justify-center px-5 py-6">
             {activePlayer ? (
-              <div className="mt-4">
-                <PlayerBox
-                  color={activePlayer.color}
-                  emoji={activePlayer.emoji}
-                  name={activePlayer.name}
-                />
+              <div className="grid justify-items-center gap-5 text-center">
+                <p className="text-2xl font-black tracking-[0.04em] text-slate-700 sm:text-3xl">
+                  Up Next:
+                </p>
+                <div
+                  className="sayless-up-next-box"
+                  style={
+                    {
+                      "--team-color": activeTeamColor,
+                      "--team-bg": activeTeamBackground,
+                    } as CSSProperties
+                  }
+                >
+                  <p className="sayless-up-next-name">{activeTeamName}</p>
+                  <div className="mt-4 flex justify-center">
+                    <PlayerBox
+                      className="player-box-flat"
+                      color={activePlayer.color}
+                      emoji={activePlayer.emoji}
+                      name={activePlayer.name}
+                    />
+                  </div>
+                </div>
               </div>
             ) : (
-              <p className="mt-3 text-sm font-medium text-slate-600">
+              <p className="text-sm font-medium text-slate-600">
                 Waiting for the next turn to start.
               </p>
             )}
@@ -181,32 +175,97 @@ export function PlayingStage({
         <div className="mt-5 flex min-h-0 flex-1">
           <SwipeCard
             busy={busy}
+            centerHint={null}
+            deadlineAt={deadlineAt}
             key={card.id}
             description={card.card.description}
             leftHint="Pass"
             leftLabel="Pass"
+            onTimerClick={
+              canPauseTurn
+                ? () => {
+                    void onTogglePause();
+                  }
+                : undefined
+            }
             onSwipeLeft={onPass}
             onSwipeRight={onCorrect}
+            pausedRemainingSeconds={turnPaused ? pausedRemainingSeconds : null}
             points={card.card.points}
             rightHint="Got it!"
             rightLabel="Got it!"
+            timerPaused={turnPaused}
             title={card.card.title}
           />
         </div>
       ) : null}
 
       {!meIsActive && turnStarted ? (
-        <div className="mt-5 rounded-3xl border border-slate-200 bg-slate-50 px-5 py-6">
-          <p className="text-lg font-black text-slate-950">
-            {sameTeamAsActive ? "Your team is guessing." : "Listen only."}
-          </p>
-          <p className="mt-2 text-sm font-medium leading-6 text-slate-600">
-            {activePlayer
-              ? sameTeamAsActive
-                ? `${activePlayer.name} is clueing. Only teammates on ${activeTeamName} should call out guesses.`
-                : `${activePlayer.name} is clueing for ${activeTeamName}. Your job is to listen to the cards, not guess.`
-              : "Waiting for the room to advance the turn."}
-          </p>
+        <div className="mt-5 flex min-h-0 flex-1 flex-col">
+          <div className="flex min-h-0 flex-1 flex-col items-center justify-start gap-5 px-5 py-6 text-center">
+            {activePlayer ? (
+              <>
+                <div
+                  className="sayless-up-next-box"
+                  style={
+                    {
+                      "--team-color": activeTeamColor,
+                      "--team-bg": activeTeamBackground,
+                    } as CSSProperties
+                  }
+                >
+                  <p className="sayless-up-next-name">{activeTeamName}</p>
+                  <div className="mt-4 flex justify-center">
+                    <PlayerBox
+                      className="player-box-flat"
+                      color={activePlayer.color}
+                      emoji={activePlayer.emoji}
+                      name={activePlayer.name}
+                    />
+                  </div>
+                </div>
+
+                {successfulCards.length > 0 ? (
+                  <div className="flex min-h-0 w-full max-w-sm flex-1 flex-col rounded-3xl border border-slate-200 bg-slate-50 px-4 py-4 text-center">
+                    <p className="shrink-0 text-sm font-black uppercase tracking-[0.14em] text-slate-500">
+                      Cards this round
+                    </p>
+                    <div className="mt-3 min-h-0 flex-1 overflow-y-auto">
+                      <ul className="grid gap-2">
+                        {successfulCards.map((card) => (
+                          <li
+                            className="flex items-center justify-between gap-3 rounded-2xl bg-white px-4 py-3 text-left"
+                            key={card.id}
+                          >
+                            <span className="min-w-0 text-base font-bold text-slate-900">
+                              {card.title}
+                            </span>
+                            <span className="shrink-0 text-sm font-black uppercase tracking-[0.08em] text-emerald-700">
+                              {card.points} pts
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                ) : null}
+              </>
+            ) : (
+              <p className="text-sm font-medium text-slate-600">
+                Waiting for the room to advance the turn.
+              </p>
+            )}
+          </div>
+
+          <StageFooter className="pt-4">
+            <div className="flex min-h-[3.5rem] items-center justify-center">
+              <CountdownBadge
+                deadlineAt={deadlineAt}
+                paused={turnPaused}
+                pausedRemainingSeconds={turnPaused ? pausedRemainingSeconds : null}
+              />
+            </div>
+          </StageFooter>
         </div>
       ) : null}
 

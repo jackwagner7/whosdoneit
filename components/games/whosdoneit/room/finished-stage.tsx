@@ -8,6 +8,7 @@ import type { Player } from "@/types/whosdoneit";
 
 type FinishedStageProps = {
   players: Player[];
+  hostPlayer: Player | null;
   isHost: boolean;
   busy: boolean;
   onPlayAgain: () => Promise<void>;
@@ -58,6 +59,7 @@ function buildPlacementRows(players: Player[]) {
 
 export function FinishedStage({
   players,
+  hostPlayer,
   isHost,
   busy,
   onPlayAgain,
@@ -120,7 +122,13 @@ export function FinishedStage({
           </button>
         </StageFooter>
       ) : (
-        <StageFooterMessage>Waiting for host to play again.</StageFooterMessage>
+        <StageFooterMessage>
+          {hostPlayer ? (
+            <PlayerBox color={hostPlayer.color} emoji={hostPlayer.emoji} name={hostPlayer.name} />
+          ) : (
+            "Waiting for host to play again."
+          )}
+        </StageFooterMessage>
       )}
     </StageShell>
   );

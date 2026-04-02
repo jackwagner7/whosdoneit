@@ -272,12 +272,20 @@ export function RoomClient({ code, initialSnapshot = null }: RoomClientProps) {
     () => (snapshot ? getRoundProgress(snapshot) : null),
     [snapshot],
   );
+  const submittedPromptPlayerIds = useMemo(
+    () => new Set(snapshot?.prompts.map((prompt) => prompt.submitted_by_player_id) ?? []),
+    [snapshot?.prompts],
+  );
   const roundCursor = useMemo(
     () => (snapshot ? getRoundCursor(snapshot.room) : { roundIndex: 0, promptIndex: 0 }),
     [snapshot],
   );
   const leaderboard = useMemo(
     () => (snapshot ? sortLeaderboard(snapshot.players) : []),
+    [snapshot],
+  );
+  const hostPlayer = useMemo(
+    () => snapshot?.players.find((player) => player.is_host) ?? null,
     [snapshot],
   );
   const openProfileSettings = useCallback(() => {
@@ -655,6 +663,12 @@ export function RoomClient({ code, initialSnapshot = null }: RoomClientProps) {
     revealTarget && (revealTarget.id === me.id || me.is_host),
   );
   const playersById = new Map(snapshot.players.map((player) => [player.id, player]));
+  const promptWaitingPlayers = snapshot.players.filter(
+    (player) => !submittedPromptPlayerIds.has(player.id),
+  );
+  const confessionWaitingPlayers = sortedPlayers.filter(
+    (player) => !confessionParticipantIds.has(player.id),
+  );
   const revealGuessRows = (guesses ?? [])
     .filter((entry) => entry.target_player_id === revealTarget?.id)
     .sort((left, right) => {
@@ -680,6 +694,14 @@ export function RoomClient({ code, initialSnapshot = null }: RoomClientProps) {
     emoji: player.emoji,
     answer: confessionByPlayerId.get(player.id) === true,
   }));
+  const guessWaitingPlayers = confessionParticipants.filter((player) => {
+    const submittedGuesses = guessesByGuesser.get(player.id) ?? 0;
+    const effectiveSubmittedGuesses =
+      player.id === me.id && isGuessSubmitting && !myGuessesSubmitted
+        ? expectedGuessesPerPlayer
+        : submittedGuesses;
+    return effectiveSubmittedGuesses < expectedGuessesPerPlayer;
+  });
 
   const hasNextRound =
     roundCursor.promptIndex + 1 < snapshot.prompts.length ||
@@ -756,6 +778,7 @@ export function RoomClient({ code, initialSnapshot = null }: RoomClientProps) {
             <LobbyStage
               busy={Boolean(busyAction)}
               canStart={canStart}
+              hostPlayer={hostPlayer}
               isHost={me.is_host}
               onStart={() =>
                 runAction("start", async () => {
@@ -772,6 +795,7 @@ export function RoomClient({ code, initialSnapshot = null }: RoomClientProps) {
                 phaseLabel="Prompt"
                 submittedCount={submittedPromptCount}
                 totalCount={snapshot.players.length}
+                waitingPlayers={promptWaitingPlayers}
               />
             ) : (
               <PromptingStage
@@ -798,6 +822,7 @@ export function RoomClient({ code, initialSnapshot = null }: RoomClientProps) {
                 phaseLabel="Confessional"
                 submittedCount={round?.confessionCount ?? 0}
                 totalCount={round?.expectedConfessions ?? 0}
+                waitingPlayers={confessionWaitingPlayers}
               />
             ) : (
               <AnsweringStage
@@ -826,6 +851,7 @@ export function RoomClient({ code, initialSnapshot = null }: RoomClientProps) {
                   confessionParticipants.length,
                 )}
                 totalCount={confessionParticipants.length}
+                waitingPlayers={guessWaitingPlayers}
               />
             ) : (
               <GuessingStage
@@ -888,6 +914,7 @@ export function RoomClient({ code, initialSnapshot = null }: RoomClientProps) {
               busy={Boolean(busyAction)}
               canAdvance={me.is_host}
               deadlineAt={snapshot.room.phase_deadline_at}
+              hostPlayer={hostPlayer}
               onNext={() =>
                 runAction("next-reveal-summary", async () => {
                   await advanceReveal(snapshot.room.id, me.id);
@@ -902,6 +929,7 @@ export function RoomClient({ code, initialSnapshot = null }: RoomClientProps) {
             <LeaderboardStage
               busy={Boolean(busyAction)}
               hasNextRound={hasNextRound}
+              hostPlayer={hostPlayer}
               isHost={me.is_host}
               myPlayerId={me.id}
               questionNumber={questionNumber}
@@ -918,6 +946,7 @@ export function RoomClient({ code, initialSnapshot = null }: RoomClientProps) {
           {snapshot.room.phase === "finished" ? (
             <FinishedStage
               busy={Boolean(busyAction)}
+              hostPlayer={hostPlayer}
               isHost={me.is_host}
               onPlayAgain={() =>
                 runAction("play-again", async () => {

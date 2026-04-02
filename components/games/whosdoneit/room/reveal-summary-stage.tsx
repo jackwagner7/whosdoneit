@@ -14,9 +14,16 @@ type RevealTruthRow = {
   answer: boolean;
 };
 
+type HostPlayerDisplay = {
+  name: string;
+  color: string;
+  emoji: string;
+};
+
 type RevealSummaryStageProps = {
   prompt: string;
   truthRows: RevealTruthRow[];
+  hostPlayer: HostPlayerDisplay | null;
   deadlineAt: string | null;
   canAdvance: boolean;
   busy: boolean;
@@ -26,6 +33,7 @@ type RevealSummaryStageProps = {
 export function RevealSummaryStage({
   prompt,
   truthRows,
+  hostPlayer,
   deadlineAt,
   canAdvance,
   busy,
@@ -36,7 +44,7 @@ export function RevealSummaryStage({
 
   return (
     <StageShell>
-      <StageHeader deadlineAt={canAdvance ? null : deadlineAt} title="Reveal" />
+      <StageHeader title="Reveal" />
       <p className="mt-3 rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-xl font-black text-slate-900 sm:text-2xl">
         {prompt}
       </p>
@@ -91,7 +99,13 @@ export function RevealSummaryStage({
           </button>
         </StageFooter>
       ) : (
-        <StageFooterMessage>Waiting for host</StageFooterMessage>
+        <StageFooterMessage deadlineAt={deadlineAt}>
+          {hostPlayer ? (
+            <PlayerBox color={hostPlayer.color} emoji={hostPlayer.emoji} name={hostPlayer.name} />
+          ) : (
+            "Waiting for host"
+          )}
+        </StageFooterMessage>
       )}
     </StageShell>
   );

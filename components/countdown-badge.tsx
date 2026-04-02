@@ -7,7 +7,7 @@ type CountdownBadgeProps = {
   paused?: boolean;
   pausedRemainingSeconds?: number | null;
   onClick?: (() => void) | undefined;
-  variant?: "default" | "button-dark";
+  variant?: "default" | "button-dark" | "footer-light" | "segmented";
 };
 
 function ClockIcon() {
@@ -97,19 +97,46 @@ export function CountdownBadge({
     );
   }
 
+  if (variant === "footer-light") {
+    return (
+      <div className="flex h-full w-[4.75rem] items-center justify-center border-l border-slate-200 px-3 text-base font-bold tabular-nums text-slate-700">
+        <span className={isUrgent ? "text-rose-600" : ""}>{remaining}</span>
+      </div>
+    );
+  }
+
+  if (variant === "segmented") {
+    const className =
+      `flex h-full min-w-[4.75rem] items-center justify-center bg-slate-50 px-3 text-xl font-bold tabular-nums text-slate-900 ${
+        paused ? "text-amber-900" : ""
+      } ${onClick ? "cursor-pointer" : ""}`;
+
+    if (onClick) {
+      return (
+        <button className={className} onClick={onClick} type="button">
+          <span className={isUrgent ? "text-rose-700" : ""}>{remaining}</span>
+        </button>
+      );
+    }
+
+    return (
+      <div className={className}>
+        <span className={isUrgent ? "text-rose-700" : ""}>{remaining}</span>
+      </div>
+    );
+  }
+
   const className =
-    `inline-flex min-w-[3.25rem] items-center justify-center gap-1 rounded-full px-3 py-1 text-base font-bold tabular-nums ${
+    `inline-flex min-w-[3.5rem] items-center justify-center rounded-full px-3 py-1.5 text-lg font-bold tabular-nums ${
       paused
         ? "bg-amber-100 text-amber-900"
         : "bg-slate-100 text-slate-950"
     } ${onClick ? "cursor-pointer" : ""}`;
-  const icon = paused ? <PauseIcon /> : <ClockIcon />;
 
   if (onClick) {
     return (
       <button className={className} onClick={onClick} type="button">
         <span className={isUrgent ? "text-rose-700" : ""}>{remaining}</span>
-        {icon}
       </button>
     );
   }
@@ -117,7 +144,6 @@ export function CountdownBadge({
   return (
     <div className={className}>
       <span className={isUrgent ? "text-rose-700" : ""}>{remaining}</span>
-      {icon}
     </div>
   );
 }

@@ -358,7 +358,7 @@ export function RevealingStage({
 
   return (
     <StageShell>
-      <StageHeader deadlineAt={truthShown && !canControl ? deadlineAt : null} title="Trial" />
+      <StageHeader title="Trial" />
       <p className="mt-3 rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-xl font-black text-slate-900 sm:text-2xl">
         {prompt}
       </p>
@@ -425,12 +425,17 @@ export function RevealingStage({
             )}
           </button>
         </StageFooter>
+      ) : truthShown ? (
+        <StageFooter>
+          <div className="grid w-full grid-cols-[1fr_4.75rem] items-stretch gap-3">
+            <div className="flex min-h-[3.5rem] items-center justify-center">
+              <PlayerBox color={target.color} emoji={target.emoji} name={target.name} />
+            </div>
+            <CountdownBadge deadlineAt={deadlineAt} variant="footer-light" />
+          </div>
+        </StageFooter>
       ) : (
-        <StageFooterMessage>
-          {truthShown
-            ? `Waiting for ${target.name} ${target.emoji}`
-            : "Revealing guesses..."}
-        </StageFooterMessage>
+        <StageFooterMessage>Revealing guesses...</StageFooterMessage>
       )}
     </StageShell>
   );

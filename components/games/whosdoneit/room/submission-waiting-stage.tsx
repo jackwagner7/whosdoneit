@@ -1,5 +1,9 @@
 "use client";
 
+import {
+  PlayerWaitingPanel,
+  type WaitingPlayerItem,
+} from "@/components/player-waiting-panel";
 import { StageShell } from "@/components/stage-shell";
 import { StageHeader } from "@/components/stage-header";
 
@@ -7,23 +11,21 @@ type SubmissionWaitingStageProps = {
   submittedCount: number;
   totalCount: number;
   phaseLabel: string;
+  waitingPlayers: WaitingPlayerItem[];
 };
 
 export function SubmissionWaitingStage({
   submittedCount,
   totalCount,
   phaseLabel,
+  waitingPlayers,
 }: SubmissionWaitingStageProps) {
   const allSubmitted = totalCount > 0 && submittedCount >= totalCount;
 
   return (
     <StageShell>
       <StageHeader
-        description={
-          allSubmitted
-            ? "All submissions are in."
-            : `Waiting for ${phaseLabel.toLowerCase()} submissions.`
-        }
+        description={allSubmitted ? "All submissions are in." : undefined}
         title={phaseLabel}
         trackingItems={[
           { label: "Submitted", value: `${Math.min(submittedCount, totalCount)}/${totalCount}` },
@@ -38,7 +40,13 @@ export function SubmissionWaitingStage({
             />
             <p className="stage-subheading text-center">Loading next stage...</p>
           </div>
-        ) : null}
+        ) : (
+          <PlayerWaitingPanel
+            label="Waiting for:"
+            players={waitingPlayers}
+            emptyMessage={`Waiting for ${phaseLabel.toLowerCase()} submissions.`}
+          />
+        )}
       </div>
     </StageShell>
   );

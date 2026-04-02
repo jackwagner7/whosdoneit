@@ -1,5 +1,6 @@
 "use client";
 
+import { CountdownBadge } from "@/components/countdown-badge";
 import { useLayoutEffect, useRef, useState } from "react";
 
 type SwipeCardProps = {
@@ -11,6 +12,11 @@ type SwipeCardProps = {
   rightLabel: string;
   leftHint: string;
   rightHint: string;
+  deadlineAt?: string | null;
+  timerPaused?: boolean;
+  pausedRemainingSeconds?: number | null;
+  onTimerClick?: (() => void) | undefined;
+  centerHint?: string | null;
   onSwipeLeft: () => Promise<void>;
   onSwipeRight: () => Promise<void>;
 };
@@ -55,6 +61,11 @@ export function SwipeCard({
   rightLabel,
   leftHint,
   rightHint,
+  deadlineAt = null,
+  timerPaused = false,
+  pausedRemainingSeconds = null,
+  onTimerClick,
+  centerHint = "Swipe card",
   onSwipeLeft,
   onSwipeRight,
 }: SwipeCardProps) {
@@ -185,7 +196,7 @@ export function SwipeCard({
     <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-x-hidden overflow-y-hidden overscroll-none bg-white select-none">
       <div className="flex items-center justify-between text-[0.72rem] font-black uppercase tracking-[0.16em] text-slate-500">
         <span>{leftHint}</span>
-        <span>Swipe card</span>
+        <span>{centerHint}</span>
         <span>{rightHint}</span>
       </div>
 
@@ -289,17 +300,26 @@ export function SwipeCard({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-[1fr_auto_1fr] items-stretch overflow-hidden rounded-2xl border-2 border-slate-300 bg-white">
         <button
-          className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-base font-bold text-slate-900 disabled:opacity-50"
+          className="bg-rose-200 px-4 py-3 text-base font-bold text-rose-900 transition hover:bg-rose-200 disabled:opacity-50"
           disabled={busy || phase === "exit-left" || phase === "exit-right"}
           onClick={() => void completeSwipe("left")}
           type="button"
         >
           {leftLabel}
         </button>
+        <div className="flex items-center justify-center border-x-2 border-slate-300">
+          <CountdownBadge
+            deadlineAt={deadlineAt}
+            onClick={onTimerClick}
+            paused={timerPaused}
+            pausedRemainingSeconds={pausedRemainingSeconds}
+            variant="segmented"
+          />
+        </div>
         <button
-          className="rounded-2xl bg-black px-4 py-3 text-base font-bold text-white disabled:opacity-50"
+          className="bg-emerald-200 px-4 py-3 text-base font-bold text-emerald-900 transition hover:bg-emerald-200 disabled:opacity-50"
           disabled={busy || phase === "exit-left" || phase === "exit-right"}
           onClick={() => void completeSwipe("right")}
           type="button"

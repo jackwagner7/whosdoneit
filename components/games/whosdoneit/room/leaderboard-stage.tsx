@@ -8,6 +8,7 @@ import type { Player } from "@/types/whosdoneit";
 
 type LeaderboardStageProps = {
   players: Player[];
+  hostPlayer: Player | null;
   myPlayerId: string;
   hasNextRound: boolean;
   questionNumber: number;
@@ -62,6 +63,7 @@ function buildPlacementRows(players: Player[]) {
 
 export function LeaderboardStage({
   players,
+  hostPlayer,
   myPlayerId,
   hasNextRound,
   questionNumber,
@@ -127,7 +129,13 @@ export function LeaderboardStage({
           </button>
         </StageFooter>
       ) : (
-        <StageFooterMessage>Waiting for host</StageFooterMessage>
+        <StageFooterMessage>
+          {hostPlayer ? (
+            <PlayerBox color={hostPlayer.color} emoji={hostPlayer.emoji} name={hostPlayer.name} />
+          ) : (
+            "Waiting for host"
+          )}
+        </StageFooterMessage>
       )}
     </StageShell>
   );

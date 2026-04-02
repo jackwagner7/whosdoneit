@@ -1,8 +1,10 @@
 "use client";
 
+import { PlayerBox } from "@/components/player-box";
 import { StageFooter, StageFooterMessage } from "@/components/stage-footer";
 import { StageShell } from "@/components/stage-shell";
 import { StageHeader } from "@/components/stage-header";
+import type { SayLessPlayer } from "@/types/sayless";
 
 type TeamSummary = {
   teamIndex: number;
@@ -15,6 +17,7 @@ type TeamSummary = {
 
 type FinishedStageProps = {
   summaries: TeamSummary[];
+  hostPlayer: SayLessPlayer | null;
   isHost: boolean;
   busy: boolean;
   onPlayAgain: () => Promise<void>;
@@ -22,6 +25,7 @@ type FinishedStageProps = {
 
 export function FinishedStage({
   summaries,
+  hostPlayer,
   isHost,
   busy,
   onPlayAgain,
@@ -72,8 +76,12 @@ export function FinishedStage({
           </button>
         </StageFooter>
       ) : (
-        <StageFooterMessage className="text-sm font-semibold text-slate-500">
-          Waiting for the host to send everyone back to the lobby.
+        <StageFooterMessage>
+          {hostPlayer ? (
+            <PlayerBox color={hostPlayer.color} emoji={hostPlayer.emoji} name={hostPlayer.name} />
+          ) : (
+            "Waiting for the host to send everyone back to the lobby."
+          )}
         </StageFooterMessage>
       )}
     </StageShell>

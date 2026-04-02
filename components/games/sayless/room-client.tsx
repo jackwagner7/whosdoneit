@@ -174,6 +174,53 @@ function buildTeamSummaries(snapshot: SayLessSnapshot) {
   });
 }
 
+function buildRoundSummaryTeams(snapshot: SayLessSnapshot) {
+  const playerRoundScores = new Map<string, number>();
+  const playedRoundCount = snapshot.state.current_round_index + 1;
+  const roundScoresByRound = Array.from({ length: playedRoundCount }, (_, roundIndex) =>
+    getRoundTeamScores(snapshot, roundIndex),
+  );
+
+  snapshot.roundResults
+    .filter((result) => result.round_index === snapshot.state.current_round_index)
+    .forEach((result) => {
+      playerRoundScores.set(
+        result.player_id,
+        (playerRoundScores.get(result.player_id) ?? 0) + result.points,
+      );
+    });
+
+  return Array.from({ length: snapshot.room.team_count }, (_, teamIndex) => {
+    const players = snapshot.players
+      .filter((player) => player.team_index === teamIndex)
+      .map((player) => ({
+        id: player.id,
+        name: player.name,
+        color: player.color,
+        emoji: player.emoji,
+        roundScore: playerRoundScores.get(player.id) ?? 0,
+      }))
+      .sort(
+        (left, right) =>
+          right.roundScore - left.roundScore || left.name.localeCompare(right.name),
+      );
+
+    return {
+      teamIndex,
+      teamName: getTeamName(snapshot.room, teamIndex),
+      color: SAY_LESS_TEAM_PALETTE[teamIndex]?.color ?? "#0f172a",
+      background: SAY_LESS_TEAM_PALETTE[teamIndex]?.background ?? "#f8fafc",
+      players,
+      roundTotal: players.reduce((sum, player) => sum + player.roundScore, 0),
+      rounds: roundScoresByRound.map((scores) => scores[teamIndex] ?? 0),
+      total: roundScoresByRound.reduce((sum, scores) => sum + (scores[teamIndex] ?? 0), 0),
+    };
+  }).sort(
+    (left, right) =>
+      right.total - left.total || left.teamName.localeCompare(right.teamName),
+  );
+}
+
 export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientProps) {
   const router = useRouter();
   const normalizedCode = code.toUpperCase();
@@ -230,6 +277,15 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
     passedIds: [] as string[],
     clearedIds: [] as string[],
   });
+  const currentTurnKeyRef = useRef<string | null>(null);
+  const knownRoundResultIdsRef = useRef<Set<string>>(new Set());
+  const [currentTurnSuccessfulCards, setCurrentTurnSuccessfulCards] = useState<
+    Array<{
+      id: string;
+      title: string;
+      points: number;
+    }>
+  >([]);
 
   const loadSnapshot = useCallback(
     async (showSpinner = false) => {
@@ -336,6 +392,10 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
   const hasTestBots = useMemo(
     () => snapshot?.players.some((player) => isTestBotName(player.name)) ?? false,
     [snapshot?.players],
+  );
+  const hostPlayer = useMemo(
+    () => snapshot?.players.find((player) => player.is_host) ?? null,
+    [snapshot],
   );
 
   const activePlayerIsTestBot = useMemo(() => {
@@ -834,6 +894,65 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
     }
   }, [error, loading, router, snapshot]);
 
+  useEffect(() => {
+    const knownResultIds = new Set((snapshot?.roundResults ?? []).map((result) => result.id));
+
+    if (!snapshot || snapshot.room.phase !== "playing" || !snapshot.state.active_player_id) {
+      currentTurnKeyRef.current = null;
+      knownRoundResultIdsRef.current = knownResultIds;
+      setCurrentTurnSuccessfulCards([]);
+      return;
+    }
+
+    const currentActivePlayer =
+      snapshot.players.find((player) => player.id === snapshot.state.active_player_id) ?? null;
+
+    if (!currentActivePlayer) {
+      currentTurnKeyRef.current = null;
+      knownRoundResultIdsRef.current = knownResultIds;
+      setCurrentTurnSuccessfulCards([]);
+      return;
+    }
+
+    const activeTeamTurnCount =
+      snapshot.state.team_turn_counts[snapshot.state.active_team_index] ?? 0;
+    const nextTurnKey = [
+      snapshot.state.current_round_index,
+      snapshot.state.active_team_index,
+      activeTeamTurnCount,
+      currentActivePlayer.id,
+    ].join(":");
+
+    if (currentTurnKeyRef.current !== nextTurnKey) {
+      currentTurnKeyRef.current = nextTurnKey;
+      knownRoundResultIdsRef.current = knownResultIds;
+      setCurrentTurnSuccessfulCards([]);
+      return;
+    }
+
+    const newSuccessfulCards = snapshot.roundResults
+      .filter(
+        (result) =>
+          result.round_index === snapshot.state.current_round_index &&
+          result.player_id === currentActivePlayer.id &&
+          !knownRoundResultIdsRef.current.has(result.id),
+      )
+      .map((result) => {
+        const cardEntry = snapshot.roomCards.find((card) => card.id === result.card_entry_id);
+        return {
+          id: result.id,
+          title: cardEntry?.card.title ?? "Unknown card",
+          points: result.points,
+        };
+      });
+
+    if (newSuccessfulCards.length > 0) {
+      setCurrentTurnSuccessfulCards((current) => [...newSuccessfulCards.reverse(), ...current]);
+    }
+
+    knownRoundResultIdsRef.current = knownResultIds;
+  }, [snapshot]);
+
   if (loading) {
     return (
       <main className="app-page">
@@ -923,13 +1042,7 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
 
   const teamSummaries = buildTeamSummaries(snapshot);
   const currentRoundNumber = snapshot.state.current_round_index + 1;
-  const isFinalRound = currentRoundNumber >= snapshot.state.round_count;
-  const nextStartingTeamIndex = teamSummaries.reduce((lowest, team, index) => {
-    if (team.totalScore < teamSummaries[lowest].totalScore) {
-      return index;
-    }
-    return lowest;
-  }, 0);
+  const roundSummaryTeams = buildRoundSummaryTeams(snapshot);
   const canStart = hasReadyTeams(snapshot.players, snapshot.room.team_count);
   const currentTeamName =
     typeof me.team_index === "number" ? getTeamName(snapshot.room, me.team_index) : "";
@@ -951,10 +1064,14 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
     typeof activePlayer?.team_index === "number"
       ? getTeamName(snapshot.room, activePlayer.team_index)
       : "No team";
-  const sameTeamAsActive =
-    typeof me.team_index === "number" &&
-    typeof activePlayer?.team_index === "number" &&
-    me.team_index === activePlayer.team_index;
+  const activeTeamColor =
+    typeof activePlayer?.team_index === "number"
+      ? (SAY_LESS_TEAM_PALETTE[activePlayer.team_index]?.color ?? "#0f172a")
+      : "#0f172a";
+  const activeTeamBackground =
+    typeof activePlayer?.team_index === "number"
+      ? (SAY_LESS_TEAM_PALETTE[activePlayer.team_index]?.background ?? "#f8fafc")
+      : "#f8fafc";
   const turnStarted = Boolean(
     activeCard &&
       (
@@ -1030,6 +1147,7 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
             <LobbyStage
               busy={Boolean(busyAction)}
               canStart={canStart}
+              hostPlayer={hostPlayer}
               isHost={me.is_host}
               myPlayerId={me.id}
               onChooseTeam={(teamIndex) =>
@@ -1113,6 +1231,8 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
           {snapshot.room.phase === "playing" ? (
             <PlayingStage
               activePlayer={activePlayer}
+              activeTeamBackground={activeTeamBackground}
+              activeTeamColor={activeTeamColor}
               activeTeamName={activeTeamName}
               busy={playStageBusy}
               card={me.id === activePlayer?.id ? activeCard : null}
@@ -1121,12 +1241,7 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
               meIsActive={me.id === activePlayer?.id}
               onStartTurn={() =>
                 runAction("start-turn", async () => {
-                  const nextCardId = getNextPlayableCardId(
-                    snapshot.roomCards,
-                    new Set<string>(),
-                    new Set<string>(),
-                  );
-                  setOptimisticTurnCardId(nextCardId);
+                  clearOptimisticTurn();
                   await startPlayerTurn(snapshot.room.id, me.id);
                 })
               }
@@ -1146,7 +1261,7 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
               remainingCards={remainingCards}
               roundCount={snapshot.state.round_count}
               roundNumber={currentRoundNumber}
-              sameTeamAsActive={Boolean(sameTeamAsActive)}
+              successfulCards={currentTurnSuccessfulCards}
               totalCards={snapshot.roomCards.length}
               turnPaused={turnPaused}
               turnStarted={turnStarted}
@@ -1156,7 +1271,7 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
           {snapshot.room.phase === "round_summary" ? (
             <RoundSummaryStage
               busy={Boolean(busyAction)}
-              isFinalRound={isFinalRound}
+              hostPlayer={hostPlayer}
               isHost={me.is_host}
               onContinue={() =>
                 runAction("continue", async () => {
@@ -1165,16 +1280,14 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
               }
               roundCount={snapshot.state.round_count}
               roundNumber={currentRoundNumber}
-              summaries={teamSummaries.map((team) => ({
-                ...team,
-                startsNextRound: team.teamIndex === nextStartingTeamIndex,
-              }))}
+              summaries={roundSummaryTeams}
             />
           ) : null}
 
           {snapshot.room.phase === "finished" ? (
             <FinishedStage
               busy={Boolean(busyAction)}
+              hostPlayer={hostPlayer}
               isHost={me.is_host}
               onPlayAgain={() =>
                 runAction("play-again", async () => {
