@@ -26,10 +26,17 @@ export function LobbyStage({
   return (
     <StageShell>
       <StageHeader
-        description={!canStart ? "Need at least 2 players to start." : undefined}
         title="Lobby"
         trackingItems={[{ label: "Players", value: `${players.length}` }]}
       />
+      <div className="lobby-waiting" aria-label="Waiting for players">
+        <p className="lobby-waiting-title">Waiting for players</p>
+        <div aria-hidden="true" className="lobby-waiting-dots">
+          <span className="lobby-waiting-dot">.</span>
+          <span className="lobby-waiting-dot">.</span>
+          <span className="lobby-waiting-dot">.</span>
+        </div>
+      </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden pr-1">
         <div className="flex min-h-full flex-col py-4">

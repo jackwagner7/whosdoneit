@@ -1,21 +1,18 @@
 .player-box-selected-guilty {
   border-color: #dc2626;
   background: #fff1f2;
-  box-shadow: 0 0 0 2px #fecdd3;
 }
 
 .player-box-trial-correct-innocent {
   border-width: 2px;
   border-color: #0ea5e9;
   background: #dbeafe;
-  box-shadow: 0 0 0 3px #bae6fd;
 }
 
 .player-box-trial-correct-guilty {
   border-width: 2px;
   border-color: #e11d48;
   background: #ffe4e6;
-  box-shadow: 0 0 0 3px #fecdd3;
 }
 
 .player-box-trial-wrong {

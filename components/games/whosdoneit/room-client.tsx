@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { AppBanner } from "@/components/app-banner";
 import { AnsweringStage } from "@/components/games/whosdoneit/room/answering-stage";
 import { EntryProfileForm } from "@/components/entry-profile-form";
+import { GameInfoSheet } from "@/components/game-info-sheet";
+import { RoomLoadingScreen } from "@/components/room-loading-screen";
 import { FinishedStage } from "@/components/games/whosdoneit/room/finished-stage";
 import { GuessingStage } from "@/components/games/whosdoneit/room/guessing-stage";
 import { LeaderboardStage } from "@/components/games/whosdoneit/room/leaderboard-stage";
@@ -15,6 +17,8 @@ import { RevealSummaryStage } from "@/components/games/whosdoneit/room/reveal-su
 import { RevealingStage } from "@/components/games/whosdoneit/room/revealing-stage";
 import { SettingsSheet } from "@/components/games/whosdoneit/room/settings-sheet";
 import { SubmissionWaitingStage } from "@/components/games/whosdoneit/room/submission-waiting-stage";
+import { createRoom as createSayLessRoom } from "@/lib/games/sayless/game";
+import { getStoredHostSettings as getStoredSayLessHostSettings } from "@/lib/games/sayless/host-settings-preferences";
 import { getGameBySlug } from "@/lib/game-catalog";
 import {
   addFakePlayers,
@@ -41,16 +45,17 @@ import {
   updatePlayerProfile,
   updateRoomSettings,
 } from "@/lib/games/whosdoneit/game";
-import { setStoredHostSettings } from "@/lib/games/whosdoneit/host-settings-preferences";
-import { getDefaultHostSettings } from "@/lib/games/whosdoneit/host-settings-preferences";
+import {
+  getDefaultHostSettings,
+  setStoredHostSettings,
+} from "@/lib/games/whosdoneit/host-settings-preferences";
 import {
   getDefaultPlayerPreferences,
   getStoredPlayerPreferences,
   hasStoredPlayerPreferences,
   setStoredPlayerPreferences,
 } from "@/lib/player-preferences";
-import { ROOM_LOADING_LABEL } from "@/lib/site-config";
-import type { GameSnapshot, Player } from "@/types/whosdoneit";
+import type { GameSnapshot, GameType, Player } from "@/types/whosdoneit";
 
 const GAME = getGameBySlug("whosdoneit");
 
@@ -93,8 +98,10 @@ export function RoomClient({ code, initialSnapshot = null }: RoomClientProps) {
   const [actionError, setActionError] = useState<string | null>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [promptText, setPromptText] = useState("");
+  const [infoOpen, setInfoOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsSaving, setSettingsSaving] = useState(false);
+  const [changingGame, setChangingGame] = useState<GameType | null>(null);
   const [addingFakePlayers, setAddingFakePlayers] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileSaving, setProfileSaving] = useState(false);
@@ -288,6 +295,7 @@ export function RoomClient({ code, initialSnapshot = null }: RoomClientProps) {
     () => snapshot?.players.find((player) => player.is_host) ?? null,
     [snapshot],
   );
+  const testingEnabled = me?.name.trim() === "test";
   const openProfileSettings = useCallback(() => {
     if (!me) {
       return;
@@ -425,9 +433,45 @@ export function RoomClient({ code, initialSnapshot = null }: RoomClientProps) {
     [loadSnapshot, me, snapshot],
   );
 
+  const handleChangeGame = useCallback(
+    async (game: GameType) => {
+      if (!snapshot || !me || !me.is_host || snapshot.room.phase !== "lobby") {
+        return;
+      }
+
+      if (game === "whosdoneit") {
+        return;
+      }
+
+      setChangingGame(game);
+      setActionError(null);
+
+      try {
+        const { room, player } = await createSayLessRoom(me.name, {
+          playerColor: me.color,
+          playerEmoji: me.emoji,
+          settings: getStoredSayLessHostSettings(),
+        });
+        setStoredPlayerPreferences({
+          name: player.name,
+          color: player.color,
+          emoji: player.emoji,
+        });
+        localStorage.setItem("playerId", player.id);
+        localStorage.setItem(`playerId:${room.code}`, player.id);
+        router.push(`/room/${room.code}`);
+      } catch (issue) {
+        setActionError(issue instanceof Error ? issue.message : "Could not switch games.");
+      } finally {
+        setChangingGame(null);
+      }
+    },
+    [me, router, snapshot],
+  );
+
   const handleAddFakePlayers = useCallback(
     async (count: number) => {
-      if (!snapshot || !me || !me.is_host) {
+      if (!snapshot || !me || !me.is_host || !testingEnabled) {
         return;
       }
 
@@ -444,7 +488,7 @@ export function RoomClient({ code, initialSnapshot = null }: RoomClientProps) {
         setAddingFakePlayers(false);
       }
     },
-    [loadSnapshot, me, snapshot],
+    [loadSnapshot, me, snapshot, testingEnabled],
   );
 
   const refreshProfileColors = useCallback(() => {
@@ -515,22 +559,7 @@ export function RoomClient({ code, initialSnapshot = null }: RoomClientProps) {
   }, [normalizedCode]);
 
   if (loading) {
-    return (
-      <main className="app-page">
-        <div className="app-page-card app-page-card-wide app-page-card-mobile-fill h-[calc(100svh-1.5rem)] max-h-[calc(100svh-1.5rem)] sm:h-[80vh] sm:max-h-[80vh] flex flex-col overflow-hidden">
-          <AppBanner label={ROOM_LOADING_LABEL} />
-          <div className="flex flex-1 items-center justify-center">
-            <div className="grid justify-items-center gap-3">
-              <div
-                aria-hidden="true"
-                className="h-12 w-12 animate-spin rounded-full border-4 border-slate-300 border-t-black"
-              />
-              <p className="text-sm font-semibold text-slate-600">Loading room...</p>
-            </div>
-          </div>
-        </div>
-      </main>
-    );
+    return <RoomLoadingScreen message="Loading room..." />;
   }
 
   if (error || !snapshot) {
@@ -545,22 +574,7 @@ export function RoomClient({ code, initialSnapshot = null }: RoomClientProps) {
     hasStoredPlayerPreferences();
 
   if (!readyForJoinGate) {
-    return (
-      <main className="app-page">
-        <div className="app-page-card app-page-card-wide app-page-card-mobile-fill h-[calc(100svh-1.5rem)] max-h-[calc(100svh-1.5rem)] sm:h-[80vh] sm:max-h-[80vh] flex flex-col overflow-hidden">
-          <AppBanner label={ROOM_LOADING_LABEL} />
-          <div className="flex flex-1 items-center justify-center">
-            <div className="grid justify-items-center gap-3">
-              <div
-                aria-hidden="true"
-                className="h-12 w-12 animate-spin rounded-full border-4 border-slate-300 border-t-black"
-              />
-              <p className="text-sm font-semibold text-slate-600">Loading room...</p>
-            </div>
-          </div>
-        </div>
-      </main>
-    );
+    return <RoomLoadingScreen message="Loading room..." />;
   }
 
   if ((!playerId || !me) && !shouldAutoJoin) {
@@ -582,22 +596,7 @@ export function RoomClient({ code, initialSnapshot = null }: RoomClientProps) {
   }
 
   if (!playerId || !me) {
-    return (
-      <main className="app-page">
-        <div className="app-page-card app-page-card-wide app-page-card-mobile-fill h-[calc(100svh-1.5rem)] max-h-[calc(100svh-1.5rem)] sm:h-[80vh] sm:max-h-[80vh] flex flex-col overflow-hidden">
-          <AppBanner label={ROOM_LOADING_LABEL} />
-          <div className="flex flex-1 items-center justify-center">
-            <div className="grid justify-items-center gap-3">
-              <div
-                aria-hidden="true"
-                className="h-12 w-12 animate-spin rounded-full border-4 border-slate-300 border-t-black"
-              />
-              <p className="text-sm font-semibold text-slate-600">Joining room...</p>
-            </div>
-          </div>
-        </div>
-      </main>
-    );
+    return <RoomLoadingScreen message="Joining room..." />;
   }
 
   const submittedPromptCount = snapshot.prompts.length;
@@ -716,7 +715,19 @@ export function RoomClient({ code, initialSnapshot = null }: RoomClientProps) {
   return (
     <main className="app-page">
       <div className="app-page-card app-page-card-wide app-page-card-mobile-fill h-[calc(100svh-1.5rem)] max-h-[calc(100svh-1.5rem)] sm:h-[80vh] sm:max-h-[80vh] relative flex flex-col overflow-hidden">
-        <AppBanner label={GAME?.name} />
+        <AppBanner
+          label={GAME?.name}
+          leftAction={{
+            label: "Go home",
+            icon: "home",
+            onClick: () => router.push("/"),
+          }}
+          rightAction={{
+            label: "Game info",
+            icon: "info",
+            onClick: () => setInfoOpen(true),
+          }}
+        />
 
         <div className="flex min-h-0 flex-1 flex-col gap-2 pt-2">
           <section className="-mx-[var(--card-padding)] border-b border-slate-200 px-[var(--card-padding)] pb-2">
@@ -972,13 +983,35 @@ export function RoomClient({ code, initialSnapshot = null }: RoomClientProps) {
           values={profileDraft}
         />
 
+        <GameInfoSheet
+          onClose={() => setInfoOpen(false)}
+          open={infoOpen}
+          steps={[
+            "One player writes the prompt for the round.",
+            "Everyone else secretly answers yes or no to that prompt.",
+            "Players accuse each other by guessing who answered yes.",
+            "The Trial reveals each truth and awards points for correct reads.",
+          ]}
+          summary="Who's Done It is a social deduction party game about reading your friends. Each round starts with a fresh prompt, hidden answers, public accusations, and then a reveal."
+          tips={[
+            "Prompts work best when they are specific enough to split the room.",
+            "You score by reading people, not by being the loudest guesser.",
+          ]}
+          title="How To Play"
+        />
+
         {me.is_host ? (
           <SettingsSheet
             addingFakePlayers={addingFakePlayers}
+            allowTesting={testingEnabled}
             allowFakePlayers={snapshot.room.phase === "lobby"}
+            allowGameChange={snapshot.room.phase === "lobby"}
             allowRoundControls={snapshot.room.phase === "lobby"}
+            changingGame={changingGame}
+            currentGame="whosdoneit"
             onAddFakePlayers={handleAddFakePlayers}
             onChange={setSettingsDraft}
+            onGameChange={handleChangeGame}
             onClose={() => setSettingsOpen(false)}
             onSave={handleSaveSettings}
             open={settingsOpen}

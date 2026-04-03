@@ -42,15 +42,15 @@ export function ProfileSettingsSheet({
   }
 
   return (
-    <div className="absolute inset-0 z-50 flex items-end bg-black/40 p-3">
-      <div className="card-enter w-full rounded-3xl bg-white p-4 shadow-xl">
-        <h3 className="text-2xl font-black">Profile</h3>
-        <p className="mt-1 text-sm text-slate-600">Update your name, colour and emoji.</p>
+    <div className="absolute inset-0 z-50 flex items-end overflow-hidden bg-black/40 p-2 sm:p-3">
+      <div className="card-enter flex max-h-full w-full flex-col overflow-hidden rounded-2xl bg-white shadow-xl">
+        <div className="overflow-y-auto p-3 sm:p-4">
+        <h3 className="text-center text-xl font-black sm:text-2xl">Profile</h3>
 
-        <div className="mt-4 grid gap-3">
+        <div className="mt-3 grid gap-3">
           <input
             autoComplete="nickname"
-            className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-xl font-semibold"
+            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-lg font-semibold sm:rounded-2xl sm:px-4 sm:py-3 sm:text-xl"
             onChange={(event) =>
               onChange({
                 ...values,
@@ -98,23 +98,26 @@ export function ProfileSettingsSheet({
             {error}
           </p>
         ) : null}
+        </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-2">
+        <div className="border-t border-slate-200 p-3 sm:p-4">
+          <div className="grid grid-cols-2 gap-2">
           <button
-            className="rounded-xl border border-slate-300 px-3 py-3 text-lg font-semibold"
+            className="rounded-xl border border-slate-300 px-3 py-2.5 text-base font-semibold sm:py-3 sm:text-lg"
             onClick={onClose}
             type="button"
           >
             Close
           </button>
           <button
-            className="rounded-xl bg-black px-3 py-3 text-lg font-semibold text-white disabled:opacity-60"
+            className="rounded-xl bg-black px-3 py-2.5 text-base font-semibold text-white disabled:opacity-60 sm:py-3 sm:text-lg"
             disabled={saving || !values.name.trim()}
             onClick={() => void onSave()}
             type="button"
           >
             {saving ? "..." : "Save"}
           </button>
+          </div>
         </div>
       </div>
     </div>

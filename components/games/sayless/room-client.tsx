@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppBanner } from "@/components/app-banner";
 import { EntryProfileForm } from "@/components/entry-profile-form";
+import { GameInfoSheet } from "@/components/game-info-sheet";
+import { RoomLoadingScreen } from "@/components/room-loading-screen";
 import { DraftingStage } from "@/components/games/sayless/room/drafting-stage";
 import { FinishedStage } from "@/components/games/sayless/room/finished-stage";
 import { LobbyStage } from "@/components/games/sayless/room/lobby-stage";
@@ -12,6 +14,7 @@ import { RoundSummaryStage } from "@/components/games/sayless/room/round-summary
 import { SettingsSheet } from "@/components/games/sayless/room/settings-sheet";
 import { ProfileSettingsSheet } from "@/components/games/whosdoneit/room/profile-settings-sheet";
 import { getGameBySlug } from "@/lib/game-catalog";
+import { createRoom as createWhosDoneItRoom } from "@/lib/games/whosdoneit/game";
 import {
   addFakePlayers,
   continueFromRoundSummary,
@@ -47,6 +50,7 @@ import {
   refreshColorChoices,
   refreshEmojiChoices,
 } from "@/lib/games/whosdoneit/game";
+import { getStoredHostSettings as getStoredWhosDoneItHostSettings } from "@/lib/games/whosdoneit/host-settings-preferences";
 import {
   getDefaultHostSettings,
   getStoredHostSettings,
@@ -58,13 +62,13 @@ import {
   hasStoredPlayerPreferences,
   setStoredPlayerPreferences,
 } from "@/lib/player-preferences";
-import { ROOM_LOADING_LABEL } from "@/lib/site-config";
 import type {
   SayLessCard,
   SayLessDraftBatchResponse,
   SayLessRoomSettings,
   SayLessSnapshot,
 } from "@/types/sayless";
+import type { GameType } from "@/types/whosdoneit";
 
 const GAME = getGameBySlug("sayless");
 
@@ -236,12 +240,14 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
   const [joinError, setJoinError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [infoOpen, setInfoOpen] = useState(false);
   const [optimisticTurnCardId, setOptimisticTurnCardId] = useState<string | null>(null);
   const [optimisticPassedCardIds, setOptimisticPassedCardIds] = useState<string[]>([]);
   const [optimisticClearedCardIds, setOptimisticClearedCardIds] = useState<string[]>([]);
   const [pendingTurnActions, setPendingTurnActions] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsSaving, setSettingsSaving] = useState(false);
+  const [changingGame, setChangingGame] = useState<GameType | null>(null);
   const [addingFakePlayers, setAddingFakePlayers] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileSaving, setProfileSaving] = useState(false);
@@ -397,6 +403,7 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
     () => snapshot?.players.find((player) => player.is_host) ?? null,
     [snapshot],
   );
+  const testingEnabled = me?.name.trim() === "test";
 
   const activePlayerIsTestBot = useMemo(() => {
     if (!snapshot?.state.active_player_id) {
@@ -641,7 +648,7 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
 
   const handleAddFakePlayers = useCallback(
     async (count: number) => {
-      if (!snapshot || !me) {
+      if (!snapshot || !me || !testingEnabled) {
         return;
       }
 
@@ -657,7 +664,43 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
         setAddingFakePlayers(false);
       }
     },
-    [loadSnapshot, me, snapshot],
+    [loadSnapshot, me, snapshot, testingEnabled],
+  );
+
+  const handleChangeGame = useCallback(
+    async (game: GameType) => {
+      if (!snapshot || !me || !me.is_host || snapshot.room.phase !== "lobby") {
+        return;
+      }
+
+      if (game === "sayless") {
+        return;
+      }
+
+      setChangingGame(game);
+      setActionError(null);
+
+      try {
+        const { room, player } = await createWhosDoneItRoom(me.name, {
+          playerColor: me.color,
+          playerEmoji: me.emoji,
+          settings: getStoredWhosDoneItHostSettings(),
+        });
+        setStoredPlayerPreferences({
+          name: player.name,
+          color: player.color,
+          emoji: player.emoji,
+        });
+        localStorage.setItem("playerId", player.id);
+        localStorage.setItem(`playerId:${room.code}`, player.id);
+        router.push(`/room/${room.code}`);
+      } catch (issue) {
+        setActionError(issue instanceof Error ? issue.message : "Could not switch games.");
+      } finally {
+        setChangingGame(null);
+      }
+    },
+    [me, router, snapshot],
   );
 
   const handleSaveProfile = useCallback(async () => {
@@ -841,6 +884,7 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
     if (
       !snapshot ||
       !me?.is_host ||
+      !testingEnabled ||
       !hasTestBots ||
       drivingTestBotsRef.current
     ) {
@@ -886,6 +930,7 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
     me?.id,
     me?.is_host,
     snapshot,
+    testingEnabled,
   ]);
 
   useEffect(() => {
@@ -954,22 +999,7 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
   }, [snapshot]);
 
   if (loading) {
-    return (
-      <main className="app-page">
-        <div className="app-page-card app-page-card-wide app-page-card-mobile-fill h-[calc(100svh-1.5rem)] max-h-[calc(100svh-1.5rem)] sm:h-[80vh] sm:max-h-[80vh] flex flex-col overflow-hidden">
-          <AppBanner label={ROOM_LOADING_LABEL} />
-          <div className="flex flex-1 items-center justify-center">
-            <div className="grid justify-items-center gap-3">
-              <div
-                aria-hidden="true"
-                className="h-12 w-12 animate-spin rounded-full border-4 border-slate-300 border-t-black"
-              />
-              <p className="text-sm font-semibold text-slate-600">Loading room...</p>
-            </div>
-          </div>
-        </div>
-      </main>
-    );
+    return <RoomLoadingScreen message="Loading room..." />;
   }
 
   if (error || !snapshot) {
@@ -984,22 +1014,7 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
     hasStoredPlayerPreferences();
 
   if (!readyForJoinGate) {
-    return (
-      <main className="app-page">
-        <div className="app-page-card app-page-card-wide app-page-card-mobile-fill h-[calc(100svh-1.5rem)] max-h-[calc(100svh-1.5rem)] sm:h-[80vh] sm:max-h-[80vh] flex flex-col overflow-hidden">
-          <AppBanner label={ROOM_LOADING_LABEL} />
-          <div className="flex flex-1 items-center justify-center">
-            <div className="grid justify-items-center gap-3">
-              <div
-                aria-hidden="true"
-                className="h-12 w-12 animate-spin rounded-full border-4 border-slate-300 border-t-black"
-              />
-              <p className="text-sm font-semibold text-slate-600">Loading room...</p>
-            </div>
-          </div>
-        </div>
-      </main>
-    );
+    return <RoomLoadingScreen message="Loading room..." />;
   }
 
   if ((!playerId || !me) && !shouldAutoJoin) {
@@ -1022,22 +1037,7 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
   }
 
   if (!playerId || !me) {
-    return (
-      <main className="app-page">
-        <div className="app-page-card app-page-card-wide app-page-card-mobile-fill h-[calc(100svh-1.5rem)] max-h-[calc(100svh-1.5rem)] sm:h-[80vh] sm:max-h-[80vh] flex flex-col overflow-hidden">
-          <AppBanner label={ROOM_LOADING_LABEL} />
-          <div className="flex flex-1 items-center justify-center">
-            <div className="grid justify-items-center gap-3">
-              <div
-                aria-hidden="true"
-                className="h-12 w-12 animate-spin rounded-full border-4 border-slate-300 border-t-black"
-              />
-              <p className="text-sm font-semibold text-slate-600">Joining room...</p>
-            </div>
-          </div>
-        </div>
-      </main>
-    );
+    return <RoomLoadingScreen message="Joining room..." />;
   }
 
   const teamSummaries = buildTeamSummaries(snapshot);
@@ -1087,9 +1087,21 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
   const playStageBusy = Boolean(busyAction) || pendingTurnActions > 0;
 
   return (
-      <main className="app-page">
-        <div className="app-page-card app-page-card-mobile-fill relative flex h-[calc(100svh-1.5rem)] max-h-[calc(100svh-1.5rem)] flex-col overflow-hidden sm:h-[80vh] sm:max-h-[80vh]">
-        <AppBanner label={GAME?.name} />
+    <main className="app-page">
+      <div className="app-page-card app-page-card-mobile-fill relative flex h-[calc(100svh-1.5rem)] max-h-[calc(100svh-1.5rem)] flex-col overflow-hidden sm:h-[80vh] sm:max-h-[80vh]">
+        <AppBanner
+          label={GAME?.name}
+          leftAction={{
+            label: "Go home",
+            icon: "home",
+            onClick: () => router.push("/"),
+          }}
+          rightAction={{
+            label: "Game info",
+            icon: "info",
+            onClick: () => setInfoOpen(true),
+          }}
+        />
 
         <div className="flex min-h-0 flex-1 flex-col gap-2 pt-2">
           <section className="-mx-[var(--card-padding)] border-b border-slate-200 px-[var(--card-padding)] pb-2">
@@ -1301,14 +1313,18 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
 
         <SettingsSheet
           addingFakePlayers={addingFakePlayers}
+          allowTesting={testingEnabled}
           allowFakePlayers={allowHostControls}
           allowHostControls={allowHostControls}
           cardsPerPlayer={settingsDraft.cardsPerPlayer}
+          changingGame={changingGame}
+          currentGame="sayless"
           isHost={me.is_host}
           onAddFakePlayers={handleAddFakePlayers}
           onCardsPerPlayerChange={(cardsPerPlayer) =>
             setSettingsDraft((current) => ({ ...current, cardsPerPlayer }))
           }
+          onGameChange={handleChangeGame}
           onClose={() => setSettingsOpen(false)}
           onRoundCountChange={(roundCount) =>
             setSettingsDraft((current) => ({ ...current, roundCount }))
@@ -1342,6 +1358,23 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
           open={profileOpen}
           saving={profileSaving}
           values={profileDraft}
+        />
+
+        <GameInfoSheet
+          onClose={() => setInfoOpen(false)}
+          open={infoOpen}
+          steps={[
+            "Each player drafts cards into the shared deck before play begins.",
+            "On your turn, describe the current card without saying the answer.",
+            "Teammates call it out while the timer runs and cards keep moving.",
+            "Rounds continue until the deck is cleared, then scores roll into the next round.",
+          ]}
+          summary="Say Less is a fast team clue game. Draft the deck, race the turn timer, and clear as many cards as your team can before time runs out."
+          tips={[
+            "Short clues beat clever clues when the timer is moving.",
+            "Rename teams and tune settings in the room controls before the game starts.",
+          ]}
+          title="How To Play"
         />
       </div>
     </main>

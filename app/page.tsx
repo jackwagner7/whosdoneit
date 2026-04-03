@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AppBanner } from "@/components/app-banner";
 import { EntryProfileForm } from "@/components/entry-profile-form";
+import { PartyGamesInfoSheet } from "@/components/party-games-info-sheet";
 import { GAME_CATALOG } from "@/lib/game-catalog";
 import { createRoom as createSayLessRoom } from "@/lib/games/sayless/game";
 import { getStoredHostSettings as getStoredSayLessHostSettings } from "@/lib/games/sayless/host-settings-preferences";
@@ -28,6 +29,7 @@ export default function Home() {
   const [joinError, setJoinError] = useState<string | null>(null);
   const [createLoading, setCreateLoading] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [infoOpen, setInfoOpen] = useState(false);
   const [pendingCreateGame, setPendingCreateGame] = useState<PendingCreateGame>(null);
   const router = useRouter();
 
@@ -142,7 +144,14 @@ export default function Home() {
   return (
     <main className="app-page">
       <div className="app-page-card app-page-card-mobile-fill flex h-[calc(100svh-1.5rem)] max-h-[calc(100svh-1.5rem)] flex-col overflow-hidden sm:h-[80vh] sm:max-h-[80vh]">
-        <AppBanner label={SITE_NAME} />
+        <AppBanner
+          label={SITE_NAME}
+          rightAction={{
+            label: "About Quick Party Games",
+            icon: "info",
+            onClick: () => setInfoOpen(true),
+          }}
+        />
 
         <div className="flex min-h-0 flex-1 flex-col gap-6 pt-6 text-center">
           <section className="flex min-h-0 flex-1 flex-col gap-3">
@@ -237,6 +246,7 @@ export default function Home() {
             )}
           </section>
         </div>
+        <PartyGamesInfoSheet onClose={() => setInfoOpen(false)} open={infoOpen} />
       </div>
     </main>
   );
