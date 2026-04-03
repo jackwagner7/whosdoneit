@@ -143,7 +143,7 @@ export default function Home() {
 
   return (
     <main className="app-page">
-      <div className="app-page-card app-page-card-mobile-fill flex h-[calc(100svh-1.5rem)] max-h-[calc(100svh-1.5rem)] flex-col overflow-hidden sm:h-[80vh] sm:max-h-[80vh]">
+      <div className="app-page-card app-page-card-mobile-fill flex h-[100svh] max-h-[100svh] flex-col overflow-hidden sm:h-[80vh] sm:max-h-[80vh]">
         <AppBanner
           label={SITE_NAME}
           rightAction={{

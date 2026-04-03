@@ -2,7 +2,7 @@
   min-height: 100svh;
   background: #f1f5f9;
   color: #000000;
-  padding: 0.75rem;
+  padding: 0;
 }
 
 .app-page-card {
@@ -21,7 +21,8 @@
 }
 
 .app-page-card-mobile-fill {
-  min-height: calc(100svh - 1.5rem);
+  min-height: 100svh;
+  border-radius: 0;
 }
 
 .app-page-content {
@@ -40,13 +41,17 @@
   line-height: 1.1;
 }
 
+.app-page-card-mobile-fill .app-page-banner {
+  border-radius: 0;
+}
+
 .player-box {
   display: inline-block;
   width: fit-content;
   max-width: 100%;
-  border: 1px solid #cbd5e1;
+  border: 0px solid #232323;
   border-radius: 0.85rem;
-  background: #fcf9f9;
+  background: #f4f4f4;
   padding: 0.48rem 0.58rem;
 }
 
@@ -197,6 +202,11 @@
 
   .app-page-card-mobile-fill {
     min-height: 80vh;
+    border-radius: 1.5rem;
+  }
+
+  .app-page-card-mobile-fill .app-page-banner {
+    border-radius: calc(1.5rem - 1px) calc(1.5rem - 1px) 0 0;
   }
 
   .player-box-value {

@@ -3,9 +3,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppBanner } from "@/components/app-banner";
+import { EditIcon } from "@/components/edit-icon";
 import { EntryProfileForm } from "@/components/entry-profile-form";
 import { GameInfoSheet } from "@/components/game-info-sheet";
 import { RoomLoadingScreen } from "@/components/room-loading-screen";
+import { SettingsIcon } from "@/components/settings-icon";
 import { DraftingStage } from "@/components/games/sayless/room/drafting-stage";
 import { FinishedStage } from "@/components/games/sayless/room/finished-stage";
 import { LobbyStage } from "@/components/games/sayless/room/lobby-stage";
@@ -1088,7 +1090,7 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
 
   return (
     <main className="app-page">
-      <div className="app-page-card app-page-card-mobile-fill relative flex h-[calc(100svh-1.5rem)] max-h-[calc(100svh-1.5rem)] flex-col overflow-hidden sm:h-[80vh] sm:max-h-[80vh]">
+      <div className="app-page-card app-page-card-mobile-fill relative flex h-[100svh] max-h-[100svh] flex-col overflow-hidden sm:h-[80vh] sm:max-h-[80vh]">
         <AppBanner
           label={GAME?.name}
           leftAction={{
@@ -1122,15 +1124,15 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
               <div className="flex items-center gap-2">
                 <button
                   aria-label="Profile settings"
-                  className="rounded-lg border border-slate-300 px-2.75 py-1.75 text-xl font-bold leading-none"
+                  className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-700 transition hover:border-slate-400 hover:text-slate-950"
                   onClick={openProfileSettings}
                   type="button"
                 >
-                  {"\uD83D\uDD8C\uFE0F"}
+                  <EditIcon />
                 </button>
                 <button
                   aria-label="Room settings"
-                  className="rounded-lg border border-slate-300 px-2.75 py-1.75 text-xl font-bold leading-none"
+                  className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-700 transition hover:border-slate-400 hover:text-slate-950"
                   onClick={() => {
                     setSettingsDraft({
                       teamCount: snapshot.room.team_count,
@@ -1143,7 +1145,7 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
                   }}
                   type="button"
                 >
-                  {"\u2699\uFE0F"}
+                  <SettingsIcon />
                 </button>
               </div>
             </div>

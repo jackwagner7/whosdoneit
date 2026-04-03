@@ -3,10 +3,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppBanner } from "@/components/app-banner";
+import { EditIcon } from "@/components/edit-icon";
 import { AnsweringStage } from "@/components/games/whosdoneit/room/answering-stage";
 import { EntryProfileForm } from "@/components/entry-profile-form";
 import { GameInfoSheet } from "@/components/game-info-sheet";
 import { RoomLoadingScreen } from "@/components/room-loading-screen";
+import { SettingsIcon } from "@/components/settings-icon";
 import { FinishedStage } from "@/components/games/whosdoneit/room/finished-stage";
 import { GuessingStage } from "@/components/games/whosdoneit/room/guessing-stage";
 import { LeaderboardStage } from "@/components/games/whosdoneit/room/leaderboard-stage";
@@ -714,7 +716,7 @@ export function RoomClient({ code, initialSnapshot = null }: RoomClientProps) {
 
   return (
     <main className="app-page">
-      <div className="app-page-card app-page-card-wide app-page-card-mobile-fill h-[calc(100svh-1.5rem)] max-h-[calc(100svh-1.5rem)] sm:h-[80vh] sm:max-h-[80vh] relative flex flex-col overflow-hidden">
+      <div className="app-page-card app-page-card-wide app-page-card-mobile-fill h-[100svh] max-h-[100svh] sm:h-[80vh] sm:max-h-[80vh] relative flex flex-col overflow-hidden">
         <AppBanner
           label={GAME?.name}
           leftAction={{
@@ -749,31 +751,31 @@ export function RoomClient({ code, initialSnapshot = null }: RoomClientProps) {
                 {snapshot.room.phase === "lobby" ? (
                   <button
                     aria-label="Profile settings"
-                    className="rounded-lg border border-slate-300 px-2.75 py-1.75 text-xl font-bold leading-none"
+                    className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-700 transition hover:border-slate-400 hover:text-slate-950"
                     onClick={openProfileSettings}
                     type="button"
                   >
-                    {"\uD83D\uDD8C\uFE0F"}
+                    <EditIcon />
                   </button>
                 ) : null}
                 {me.is_host ? (
                   <button
                     aria-label="Host game settings"
-                    className="rounded-lg border border-slate-300 px-2.75 py-1.75 text-xl font-bold leading-none"
+                    className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-700 transition hover:border-slate-400 hover:text-slate-950"
                     onClick={() => {
                       setSettingsDraft({
-                      promptSeconds: snapshot.room.prompt_seconds,
-                      roundCount: snapshot.room.round_count,
-                      answeringSeconds: snapshot.room.answering_seconds,
-                      guessingSeconds: snapshot.room.guessing_seconds,
-                      revealSeconds: snapshot.room.reveal_seconds,
-                      fastMode: snapshot.room.fast_mode === true,
-                    });
-                    setSettingsOpen(true);
-                  }}
+                        promptSeconds: snapshot.room.prompt_seconds,
+                        roundCount: snapshot.room.round_count,
+                        answeringSeconds: snapshot.room.answering_seconds,
+                        guessingSeconds: snapshot.room.guessing_seconds,
+                        revealSeconds: snapshot.room.reveal_seconds,
+                        fastMode: snapshot.room.fast_mode === true,
+                      });
+                      setSettingsOpen(true);
+                    }}
                     type="button"
                   >
-                    {"\u2699\uFE0F"}
+                    <SettingsIcon />
                   </button>
                 ) : null}
               </div>
