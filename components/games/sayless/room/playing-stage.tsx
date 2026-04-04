@@ -34,7 +34,7 @@ type PlayingStageProps = {
   busy: boolean;
   onStartTurn: () => Promise<void>;
   onTogglePause: () => Promise<void>;
-  onSkipRound: () => Promise<void>;
+  onSkipTurn: () => Promise<void>;
   onPass: () => Promise<void>;
   onCorrect: () => Promise<void>;
 };
@@ -77,8 +77,8 @@ function SkipIcon({ className = "h-5 w-5" }: { className?: string }) {
       strokeWidth="2"
       viewBox="0 0 24 24"
     >
-      <path d="M5 6v12" />
-      <path d="m9 12 8-6v12z" />
+      <path d="m7 12 8-6v12z" />
+      <path d="M19 6v12" />
     </svg>
   );
 }
@@ -103,7 +103,7 @@ export function PlayingStage({
   busy,
   onStartTurn,
   onTogglePause,
-  onSkipRound,
+  onSkipTurn,
   onPass,
   onCorrect,
 }: PlayingStageProps) {
@@ -302,10 +302,10 @@ export function PlayingStage({
                   <PlayIcon />
                 </button>
                 <button
-                  aria-label="Skip round"
+                  aria-label="Skip turn"
                   className="flex items-center justify-center rounded-2xl border border-slate-300 bg-white px-4 py-3 text-slate-950 disabled:opacity-50"
                   disabled={busy}
-                  onClick={() => void onSkipRound()}
+                  onClick={() => void onSkipTurn()}
                   type="button"
                 >
                   <SkipIcon />
@@ -313,7 +313,7 @@ export function PlayingStage({
               </div>
             ) : (
               <p className="mt-4 text-sm font-medium text-slate-600">
-                Waiting for the turn controller to resume or skip the round.
+                Waiting for the turn controller to resume or skip the turn.
               </p>
             )}
           </div>

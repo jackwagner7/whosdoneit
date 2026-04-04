@@ -78,41 +78,46 @@ export function GuessingStage({
         ]}
         title="Accusations"
       />
-      <p className="mt-3 rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-xl font-black text-slate-900 sm:text-2xl">
-        {prompt}
-      </p>
-      <p className="mt-1 text-xs text-slate-500">
-        Who&apos;s Done It?
-      </p>
-      <div className="mt-3 min-h-0 flex-1 overflow-y-auto overflow-x-hidden pr-1">
-        <ul className="flex min-w-0 flex-wrap justify-center gap-3">
-          {targets.map((target) => {
-            const selected = selectedSet.has(target.id);
-            return (
-              <li className="flex max-w-full items-center justify-center" key={target.id}>
-                <button
-                  className="rounded-2xl p-0.5 transition disabled:opacity-60"
-                  disabled={busy}
-                  onClick={() =>
-                    setSelectedTargetIds((current) =>
-                      current.includes(target.id)
-                        ? current.filter((id) => id !== target.id)
-                        : [...current, target.id],
-                    )
-                  }
-                  type="button"
-                >
-                  <PlayerBox
-                    className={selected ? "player-box-selected-guilty" : ""}
-                    color={target.color}
-                    emoji={target.emoji}
-                    name={target.name}
-                  />
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+      <div className="flex min-h-0 flex-1 flex-col justify-evenly gap-6 overflow-y-auto overflow-x-hidden pr-1">
+        <div className="flex flex-col items-center gap-1">
+          <p className="px-4 text-center text-xl font-black text-slate-900 sm:text-2xl">
+            {prompt}
+          </p>
+        </div>
+
+        <div className="flex flex-col items-center gap-3">
+          <p className="text-center text-sm font-semibold uppercase tracking-[0.12em] text-slate-500 sm:text-base">
+            Select the players you think are guilty
+          </p>
+          <ul className="flex min-w-0 flex-wrap justify-center gap-3">
+            {targets.map((target) => {
+              const selected = selectedSet.has(target.id);
+              return (
+                <li className="flex max-w-full items-center justify-center" key={target.id}>
+                  <button
+                    className="rounded-2xl p-0.5 transition disabled:opacity-60"
+                    disabled={busy}
+                    onClick={() =>
+                      setSelectedTargetIds((current) =>
+                        current.includes(target.id)
+                          ? current.filter((id) => id !== target.id)
+                          : [...current, target.id],
+                      )
+                    }
+                    type="button"
+                  >
+                    <PlayerBox
+                      className={selected ? "player-box-selected-guilty" : ""}
+                      color={target.color}
+                      emoji={target.emoji}
+                      name={target.name}
+                    />
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
       </div>
       <StageFooter>
         <button

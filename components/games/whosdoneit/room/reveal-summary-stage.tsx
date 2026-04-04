@@ -45,7 +45,7 @@ export function RevealSummaryStage({
   return (
     <StageShell>
       <StageHeader title="Reveal" />
-      <p className="mt-3 rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-xl font-black text-slate-900 sm:text-2xl">
+      <p className="mt-3 px-4 text-center text-xl font-black text-slate-900 sm:text-2xl">
         {prompt}
       </p>
       <p className="stage-subheading mt-3 text-center">Truths:</p>
@@ -57,7 +57,11 @@ export function RevealSummaryStage({
           />
 
           <div className="min-w-0 flex-1 rounded-2xl border border-sky-200 bg-sky-100 p-3">
-            <p className="stage-subheading text-center">Innocent</p>
+            <div className="flex justify-center">
+              <p className="inline-flex rounded-full border border-sky-300 bg-white/70 px-3 py-1 text-xs font-black uppercase tracking-[0.16em] text-sky-800">
+                INNOCENT
+              </p>
+            </div>
             <ul className="mt-2 grid gap-2">
               {innocentRows.map((row) => (
                 <li className="flex justify-center" key={row.id}>
@@ -68,7 +72,11 @@ export function RevealSummaryStage({
           </div>
 
           <div className="min-w-0 flex-1 rounded-2xl bg-rose-50 p-3">
-            <p className="stage-subheading text-center">Guilty</p>
+            <div className="flex justify-center">
+              <p className="inline-flex rounded-full border border-rose-300 bg-white/70 px-3 py-1 text-xs font-black uppercase tracking-[0.16em] text-rose-800">
+                GUILTY
+              </p>
+            </div>
             <ul className="mt-2 grid gap-2">
               {guiltyRows.map((row) => (
                 <li className="flex justify-center" key={row.id}>

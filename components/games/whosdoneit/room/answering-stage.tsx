@@ -82,8 +82,11 @@ export function AnsweringStage({
         title="Confessional"
       />
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center">
-        <p className="mt-6 w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-center text-xl font-black text-slate-900 sm:text-2xl">
+        <p className="mt-6 w-full px-4 text-center text-xl font-black text-slate-900 sm:text-2xl">
           {prompt}
+        </p>
+        <p className="mt-6 text-center text-sm font-semibold uppercase tracking-[0.12em] text-slate-500 sm:text-base">
+          Answer the question truthfully
         </p>
         <div className="mt-8 grid w-full max-w-sm grid-cols-2 gap-3">
           <button

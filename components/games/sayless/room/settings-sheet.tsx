@@ -148,7 +148,7 @@ export function SettingsSheet({
               <div className="rounded-xl border border-slate-300 bg-white px-3 py-2">
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-[0.8rem] font-semibold text-slate-900">Game</p>
-                  <p className="text-[0.68rem] text-slate-500">New lobby</p>
+                  <p className="text-[0.68rem] text-slate-500">Same code</p>
                 </div>
                 <div className="mt-2 grid grid-cols-2 gap-2">
                   {GAME_OPTIONS.map((option) => {
@@ -167,7 +167,7 @@ export function SettingsSheet({
                         onClick={() => void onGameChange(option.value)}
                         type="button"
                       >
-                        {isSwitching ? "Opening..." : option.label}
+                        {isSwitching ? "Switching..." : option.label}
                       </button>
                     );
                   })}

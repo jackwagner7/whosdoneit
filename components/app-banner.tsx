@@ -1,5 +1,7 @@
 "use client";
 
+import type { ReactNode } from "react";
+
 type AppBannerActionIcon = "home" | "info";
 
 type AppBannerAction = {
@@ -13,6 +15,8 @@ type AppBannerProps = {
   className?: string;
   leftAction?: AppBannerAction;
   rightAction?: AppBannerAction;
+  leftContent?: ReactNode;
+  rightContent?: ReactNode;
 };
 
 function BannerIcon({ icon }: { icon: AppBannerActionIcon }) {
@@ -80,22 +84,24 @@ export function AppBanner({
   className,
   leftAction,
   rightAction,
+  leftContent,
+  rightContent,
 }: AppBannerProps) {
   const bannerClass = className ? `app-page-banner ${className}` : "app-page-banner";
-  const hasActions = Boolean(leftAction || rightAction);
+  const hasActions = Boolean(leftAction || rightAction || leftContent || rightContent);
 
   return (
     <div className={bannerClass}>
       {hasActions ? (
         <div className="grid grid-cols-[2rem_minmax(0,1fr)_2rem] items-stretch">
           <div className="flex items-center justify-center border-r border-white/20">
-            <BannerActionButton action={leftAction} />
+            {leftContent ?? <BannerActionButton action={leftAction} />}
           </div>
           <div className="flex min-w-0 items-center justify-center px-2 text-center text-[0.92rem] tracking-[0.05em] sm:text-[1rem]">
             <div className="truncate">{label}</div>
           </div>
           <div className="flex items-center justify-center border-l border-white/20">
-            <BannerActionButton action={rightAction} />
+            {rightContent ?? <BannerActionButton action={rightAction} />}
           </div>
         </div>
       ) : (

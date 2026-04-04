@@ -18,7 +18,9 @@ type StageFooterMessageProps = {
 
 export function StageFooter({ children, className = "" }: StageFooterProps) {
   return (
-    <div className={`mt-auto shrink-0 border-t border-slate-200 pt-3 ${className}`.trim()}>
+    <div
+      className={`mt-auto -mx-[var(--card-padding)] shrink-0 border-t border-slate-200 bg-white px-[var(--card-padding)] pt-3 pb-[var(--card-padding)] ${className}`.trim()}
+    >
       {children}
     </div>
   );

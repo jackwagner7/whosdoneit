@@ -3,95 +3,45 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AppBanner } from "@/components/app-banner";
-import { EntryProfileForm } from "@/components/entry-profile-form";
 import { PartyGamesInfoSheet } from "@/components/party-games-info-sheet";
 import { GAME_CATALOG } from "@/lib/game-catalog";
-import { createRoom as createSayLessRoom } from "@/lib/games/sayless/game";
-import { getStoredHostSettings as getStoredSayLessHostSettings } from "@/lib/games/sayless/host-settings-preferences";
-import { createRoom as createWhosDoneItRoom } from "@/lib/games/whosdoneit/game";
-import { getStoredHostSettings as getStoredWhosDoneItHostSettings } from "@/lib/games/whosdoneit/host-settings-preferences";
-import {
-  getDefaultPlayerPreferences,
-  getStoredPlayerPreferences,
-  hasStoredPlayerPreferences,
-  setStoredPlayerPreferences,
-} from "@/lib/player-preferences";
 import { getRoomDirectoryEntryByCode } from "@/lib/room-directory";
 import { SITE_NAME, SITE_TAGLINE } from "@/lib/site-config";
 
-type PendingCreateGame = "whosdoneit" | "sayless" | null;
+type GameSlug = "whosdoneit" | "sayless";
+type TitleWord = {
+  emoji: string;
+};
+
+const TITLE_EMOJI_OPTIONS: Array<{ emojis: string[] }> = [
+  { emojis: ["⚡", "💨", "🚀", "✨", "🌟", "🔥", "💥", "⏱️", "⏳"] },
+  { emojis: ["🎉", "🥳", "🎊", "🎈", "🪩", "🎵", "🍕", "🍿", "🙌"] },
+  { emojis: ["🕹️", "🎮", "👾", "🪙", "🏆", "🎯", "🧩", "🌈", "🎪", "🎲", "🎟️"] },
+];
+
+function getRandomTitleWords(): TitleWord[] {
+  return TITLE_EMOJI_OPTIONS.map((word) => ({
+    emoji: word.emojis[Math.floor(Math.random() * word.emojis.length)] ?? "",
+  }));
+}
 
 export default function Home() {
-  const [defaults, setDefaults] = useState(() => getDefaultPlayerPreferences());
   const [joinOpen, setJoinOpen] = useState(false);
   const [joinCode, setJoinCode] = useState("");
   const [joinLoading, setJoinLoading] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
-  const [createLoading, setCreateLoading] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
   const [infoOpen, setInfoOpen] = useState(false);
-  const [pendingCreateGame, setPendingCreateGame] = useState<PendingCreateGame>(null);
+  const [titleWords, setTitleWords] = useState<TitleWord[]>(
+    TITLE_EMOJI_OPTIONS.map((word) => ({ emoji: word.emojis[0] ?? "" })),
+  );
   const router = useRouter();
 
   useEffect(() => {
-    setDefaults(getStoredPlayerPreferences());
+    setTitleWords(getRandomTitleWords());
   }, []);
 
-  async function createRoomForGame(
-    gameSlug: Exclude<PendingCreateGame, null>,
-    profile: { name: string; color: string; emoji: string },
-  ) {
-    setCreateLoading(true);
-    setCreateError(null);
-
-    try {
-      if (gameSlug === "whosdoneit") {
-        const { room, player } = await createWhosDoneItRoom(profile.name.trim(), {
-          playerColor: profile.color,
-          playerEmoji: profile.emoji,
-          settings: getStoredWhosDoneItHostSettings(),
-        });
-        setStoredPlayerPreferences({
-          name: player.name,
-          color: player.color,
-          emoji: player.emoji,
-        });
-        localStorage.setItem("playerId", player.id);
-        localStorage.setItem(`playerId:${room.code}`, player.id);
-        router.push(`/room/${room.code}`);
-        return;
-      }
-
-      const { room, player } = await createSayLessRoom(profile.name.trim(), {
-        playerColor: profile.color,
-        playerEmoji: profile.emoji,
-        settings: getStoredSayLessHostSettings(),
-      });
-      setStoredPlayerPreferences({
-        name: player.name,
-        color: player.color,
-        emoji: player.emoji,
-      });
-      localStorage.setItem("playerId", player.id);
-      localStorage.setItem(`playerId:${room.code}`, player.id);
-      router.push(`/room/${room.code}`);
-    } catch (issue) {
-      setCreateError(issue instanceof Error ? issue.message : "Failed to create room.");
-    } finally {
-      setCreateLoading(false);
-    }
-  }
-
-  async function handleCreateClick(gameSlug: Exclude<PendingCreateGame, null>) {
-    setCreateError(null);
-
-    if (hasStoredPlayerPreferences()) {
-      const storedPreferences = getStoredPlayerPreferences();
-      await createRoomForGame(gameSlug, storedPreferences);
-      return;
-    }
-
-    setPendingCreateGame(gameSlug);
+  function handleCreateClick(gameSlug: GameSlug) {
+    router.push(`/create/${gameSlug}`);
   }
 
   async function handleJoinSubmit() {
@@ -118,36 +68,13 @@ export default function Home() {
     }
   }
 
-  if (pendingCreateGame) {
-    const selectedGame =
-      GAME_CATALOG.find((game) => game.slug === pendingCreateGame) ?? null;
-
-    return (
-      <main className="app-page">
-        <EntryProfileForm
-          bannerLabel={selectedGame?.name ?? SITE_NAME}
-          error={createError}
-          initialColor={defaults.color}
-          initialEmoji={defaults.emoji}
-          initialName={defaults.name}
-          loading={createLoading}
-          onSubmit={async (values) => {
-            await createRoomForGame(pendingCreateGame, values);
-          }}
-          submitLabel="Create"
-          title={`Create ${selectedGame?.shortName ?? "Game"} Room`}
-        />
-      </main>
-    );
-  }
-
   return (
     <main className="app-page">
       <div className="app-page-card app-page-card-mobile-fill flex h-[100svh] max-h-[100svh] flex-col overflow-hidden sm:h-[80vh] sm:max-h-[80vh]">
         <AppBanner
           label={SITE_NAME}
           rightAction={{
-            label: "About Quick Party Games",
+            label: "About Quick Party Arcade",
             icon: "info",
             onClick: () => setInfoOpen(true),
           }}
@@ -159,26 +86,21 @@ export default function Home() {
               <div className="grid gap-3">
                 <div className="text-center">
                   <h1 className="mt-2 text-4xl font-black tracking-tight sm:text-5xl">
-                    Let&apos;s Party
+                    {titleWords.map((word, index) => (
+                      <span key={`${word.emoji}-${index}`}>
+                        {word.emoji}{" "}
+                      </span>
+                    ))}
                   </h1>
                   <p className="mt-2 text-sm font-medium text-slate-600 sm:text-base">
                     {SITE_TAGLINE}
                   </p>
                 </div>
-                {createError ? (
-                  <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-700">
-                    {createError}
-                  </p>
-                ) : null}
-
                 {GAME_CATALOG.map((game) => (
                   <button
                     className="rounded-3xl border border-slate-200 bg-white p-4 text-center shadow-sm transition-transform duration-150 hover:-translate-y-0.5"
-                    disabled={createLoading}
                     key={game.slug}
-                    onClick={() =>
-                      void handleCreateClick(game.slug as Exclude<PendingCreateGame, null>)
-                    }
+                    onClick={() => handleCreateClick(game.slug as GameSlug)}
                     type="button"
                   >
                     <p className="text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">

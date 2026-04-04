@@ -6,6 +6,7 @@ import {
 } from "@/lib/games/whosdoneit/game";
 import { PLAYER_COLOR_POOL } from "@/lib/player-color-pool";
 import { supabase } from "@/lib/supabase";
+import type { RoomSettings } from "@/types/whosdoneit";
 import type {
   SayLessCard,
   SayLessDraftBatchResponse,
@@ -520,6 +521,23 @@ export async function updateRoomSettings(
   });
 }
 
+export async function switchRoomToWhosDoneIt(
+  roomId: string,
+  playerId: string,
+  settings: Partial<RoomSettings>,
+) {
+  await callRpc("sl_switch_room_to_whd", {
+    p_room_id: roomId,
+    p_player_id: playerId,
+    p_prompt_seconds: settings.promptSeconds,
+    p_round_count: settings.roundCount,
+    p_answering_seconds: settings.answeringSeconds,
+    p_guessing_seconds: settings.guessingSeconds,
+    p_reveal_seconds: settings.revealSeconds,
+    p_fast_mode: settings.fastMode,
+  });
+}
+
 export async function shuffleTeams(roomId: string, playerId: string) {
   await callRpc("sl_shuffle_teams", {
     p_room_id: roomId,
@@ -637,8 +655,8 @@ export async function toggleTurnPause(roomId: string, playerId: string) {
   });
 }
 
-export async function skipRound(roomId: string, playerId: string) {
-  await callRpc("sl_skip_round", {
+export async function skipTurn(roomId: string, playerId: string) {
+  await callRpc("sl_skip_turn", {
     p_room_id: roomId,
     p_player_id: playerId,
   });

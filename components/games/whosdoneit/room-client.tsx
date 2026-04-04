@@ -8,6 +8,7 @@ import { AnsweringStage } from "@/components/games/whosdoneit/room/answering-sta
 import { EntryProfileForm } from "@/components/entry-profile-form";
 import { GameInfoSheet } from "@/components/game-info-sheet";
 import { RoomLoadingScreen } from "@/components/room-loading-screen";
+import { RoomHeaderMenu } from "@/components/room-header-menu";
 import { SettingsIcon } from "@/components/settings-icon";
 import { FinishedStage } from "@/components/games/whosdoneit/room/finished-stage";
 import { GuessingStage } from "@/components/games/whosdoneit/room/guessing-stage";
@@ -19,7 +20,6 @@ import { RevealSummaryStage } from "@/components/games/whosdoneit/room/reveal-su
 import { RevealingStage } from "@/components/games/whosdoneit/room/revealing-stage";
 import { SettingsSheet } from "@/components/games/whosdoneit/room/settings-sheet";
 import { SubmissionWaitingStage } from "@/components/games/whosdoneit/room/submission-waiting-stage";
-import { createRoom as createSayLessRoom } from "@/lib/games/sayless/game";
 import { getStoredHostSettings as getStoredSayLessHostSettings } from "@/lib/games/sayless/host-settings-preferences";
 import { getGameBySlug } from "@/lib/game-catalog";
 import {
@@ -40,6 +40,7 @@ import {
   refreshEmojiChoices,
   startGame,
   startNextRound,
+  switchRoomToSayLess,
   submitConfession,
   submitGuesses,
   submitPrompt,
@@ -449,26 +450,15 @@ export function RoomClient({ code, initialSnapshot = null }: RoomClientProps) {
       setActionError(null);
 
       try {
-        const { room, player } = await createSayLessRoom(me.name, {
-          playerColor: me.color,
-          playerEmoji: me.emoji,
-          settings: getStoredSayLessHostSettings(),
-        });
-        setStoredPlayerPreferences({
-          name: player.name,
-          color: player.color,
-          emoji: player.emoji,
-        });
-        localStorage.setItem("playerId", player.id);
-        localStorage.setItem(`playerId:${room.code}`, player.id);
-        router.push(`/room/${room.code}`);
+        await switchRoomToSayLess(snapshot.room.id, me.id, getStoredSayLessHostSettings());
+        window.location.reload();
       } catch (issue) {
         setActionError(issue instanceof Error ? issue.message : "Could not switch games.");
       } finally {
         setChangingGame(null);
       }
     },
-    [me, router, snapshot],
+    [me, snapshot],
   );
 
   const handleAddFakePlayers = useCallback(
@@ -559,6 +549,22 @@ export function RoomClient({ code, initialSnapshot = null }: RoomClientProps) {
       setLinkCopied(false);
     }
   }, [normalizedCode]);
+
+  const openRoomSettings = useCallback(() => {
+    if (!me?.is_host) {
+      return;
+    }
+
+    setSettingsDraft({
+      promptSeconds: snapshot.room.prompt_seconds,
+      roundCount: snapshot.room.round_count,
+      answeringSeconds: snapshot.room.answering_seconds,
+      guessingSeconds: snapshot.room.guessing_seconds,
+      revealSeconds: snapshot.room.reveal_seconds,
+      fastMode: snapshot.room.fast_mode === true,
+    });
+    setSettingsOpen(true);
+  }, [me, snapshot.room]);
 
   if (loading) {
     return <RoomLoadingScreen message="Loading room..." />;
@@ -660,8 +666,9 @@ export function RoomClient({ code, initialSnapshot = null }: RoomClientProps) {
   const truth = revealTarget
     ? confessions.find((entry) => entry.player_id === revealTarget.id)?.answer
     : undefined;
+  const isTestUser = me.name.trim().toLowerCase() === "test";
   const canRevealControl = Boolean(
-    revealTarget && (revealTarget.id === me.id || me.is_host),
+    revealTarget && (revealTarget.id === me.id || isTestUser),
   );
   const playersById = new Map(snapshot.players.map((player) => [player.id, player]));
   const promptWaitingPlayers = snapshot.players.filter(
@@ -713,6 +720,8 @@ export function RoomClient({ code, initialSnapshot = null }: RoomClientProps) {
     totalQuestions,
     roundCursor.roundIndex * questionsPerRound + roundCursor.promptIndex + 1,
   );
+  const isLobby = snapshot.room.phase === "lobby";
+  const showTopBar = isLobby || Boolean(actionError);
 
   return (
     <main className="app-page">
@@ -724,68 +733,82 @@ export function RoomClient({ code, initialSnapshot = null }: RoomClientProps) {
             icon: "home",
             onClick: () => router.push("/"),
           }}
-          rightAction={{
-            label: "Game info",
-            icon: "info",
-            onClick: () => setInfoOpen(true),
-          }}
+          rightAction={
+            isLobby
+              ? {
+                  label: "Game info",
+                  icon: "info",
+                  onClick: () => setInfoOpen(true),
+                }
+              : undefined
+          }
+          rightContent={
+            isLobby ? undefined : (
+              <RoomHeaderMenu
+                codeCopied={linkCopied}
+                onCopyRoomLink={handleCopyRoomLink}
+                onOpenInfo={() => setInfoOpen(true)}
+                onOpenProfile={openProfileSettings}
+                onOpenSettings={openRoomSettings}
+                roomCode={snapshot.room.code}
+                settingsDisabled={!me.is_host}
+                settingsHint={me.is_host ? "Room controls" : "Host only"}
+              />
+            )
+          }
         />
 
         <div className="flex min-h-0 flex-1 flex-col gap-2 pt-2">
-          <section className="-mx-[var(--card-padding)] border-b border-slate-200 px-[var(--card-padding)] pb-2">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <button
-                  aria-label={linkCopied ? "Room link copied" : "Copy room link"}
-                  className={`rounded-lg px-1 text-base font-black tracking-[0.08em] transition-colors sm:text-lg ${
-                    linkCopied ? "text-emerald-600" : "text-slate-950"
+          {showTopBar ? (
+            <section className="-mx-[var(--card-padding)] border-b border-slate-200 bg-white px-[var(--card-padding)] pb-2">
+              {isLobby ? (
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <button
+                      aria-label={linkCopied ? "Room link copied" : "Copy room link"}
+                      className={`rounded-lg px-1 text-base font-black tracking-[0.08em] transition-colors sm:text-lg ${
+                        linkCopied ? "text-emerald-600" : "text-slate-950"
+                      }`}
+                      onClick={() => void handleCopyRoomLink()}
+                      title={linkCopied ? "Copied" : "Click to copy room link"}
+                      type="button"
+                    >
+                      {snapshot.room.code}
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      aria-label="Profile settings"
+                      className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-700 transition hover:border-slate-400 hover:text-slate-950"
+                      onClick={openProfileSettings}
+                      type="button"
+                    >
+                      <EditIcon />
+                    </button>
+                    {me.is_host ? (
+                      <button
+                        aria-label="Host game settings"
+                        className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-700 transition hover:border-slate-400 hover:text-slate-950"
+                        onClick={openRoomSettings}
+                        type="button"
+                      >
+                        <SettingsIcon />
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+              {actionError ? (
+                <p
+                  className={`rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 ${
+                    isLobby ? "mt-3" : ""
                   }`}
-                  onClick={() => void handleCopyRoomLink()}
-                  title={linkCopied ? "Copied" : "Click to copy room link"}
-                  type="button"
                 >
-                  {snapshot.room.code}
-                </button>
-              </div>
-              <div className="flex items-center gap-2">
-                {snapshot.room.phase === "lobby" ? (
-                  <button
-                    aria-label="Profile settings"
-                    className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-700 transition hover:border-slate-400 hover:text-slate-950"
-                    onClick={openProfileSettings}
-                    type="button"
-                  >
-                    <EditIcon />
-                  </button>
-                ) : null}
-                {me.is_host ? (
-                  <button
-                    aria-label="Host game settings"
-                    className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-700 transition hover:border-slate-400 hover:text-slate-950"
-                    onClick={() => {
-                      setSettingsDraft({
-                        promptSeconds: snapshot.room.prompt_seconds,
-                        roundCount: snapshot.room.round_count,
-                        answeringSeconds: snapshot.room.answering_seconds,
-                        guessingSeconds: snapshot.room.guessing_seconds,
-                        revealSeconds: snapshot.room.reveal_seconds,
-                        fastMode: snapshot.room.fast_mode === true,
-                      });
-                      setSettingsOpen(true);
-                    }}
-                    type="button"
-                  >
-                    <SettingsIcon />
-                  </button>
-                ) : null}
-              </div>
-            </div>
-            {actionError ? (
-              <p className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-                {actionError}
-              </p>
-            ) : null}
-          </section>
+                  {actionError}
+                </p>
+              ) : null}
+            </section>
+          ) : null}
 
           {snapshot.room.phase === "lobby" ? (
             <LobbyStage

@@ -7,6 +7,7 @@ import { EditIcon } from "@/components/edit-icon";
 import { EntryProfileForm } from "@/components/entry-profile-form";
 import { GameInfoSheet } from "@/components/game-info-sheet";
 import { RoomLoadingScreen } from "@/components/room-loading-screen";
+import { RoomHeaderMenu } from "@/components/room-header-menu";
 import { SettingsIcon } from "@/components/settings-icon";
 import { DraftingStage } from "@/components/games/sayless/room/drafting-stage";
 import { FinishedStage } from "@/components/games/sayless/room/finished-stage";
@@ -16,7 +17,7 @@ import { RoundSummaryStage } from "@/components/games/sayless/room/round-summary
 import { SettingsSheet } from "@/components/games/sayless/room/settings-sheet";
 import { ProfileSettingsSheet } from "@/components/games/whosdoneit/room/profile-settings-sheet";
 import { getGameBySlug } from "@/lib/game-catalog";
-import { createRoom as createWhosDoneItRoom } from "@/lib/games/whosdoneit/game";
+import { getStoredHostSettings as getStoredWhosDoneItHostSettings } from "@/lib/games/whosdoneit/host-settings-preferences";
 import {
   addFakePlayers,
   continueFromRoundSummary,
@@ -32,12 +33,13 @@ import {
   runTestBots,
   SAY_LESS_TEAM_PALETTE,
   shuffleTeams,
-  skipRound,
+  skipTurn,
   startPlayerTurn,
   startGame,
   submitDraftDecision,
   submitTurnAction,
   subscribeToRoom,
+  switchRoomToWhosDoneIt,
   toggleTurnPause,
   updatePlayerProfile,
   updateRoomSettings,
@@ -52,7 +54,6 @@ import {
   refreshColorChoices,
   refreshEmojiChoices,
 } from "@/lib/games/whosdoneit/game";
-import { getStoredHostSettings as getStoredWhosDoneItHostSettings } from "@/lib/games/whosdoneit/host-settings-preferences";
 import {
   getDefaultHostSettings,
   getStoredHostSettings,
@@ -683,26 +684,19 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
       setActionError(null);
 
       try {
-        const { room, player } = await createWhosDoneItRoom(me.name, {
-          playerColor: me.color,
-          playerEmoji: me.emoji,
-          settings: getStoredWhosDoneItHostSettings(),
-        });
-        setStoredPlayerPreferences({
-          name: player.name,
-          color: player.color,
-          emoji: player.emoji,
-        });
-        localStorage.setItem("playerId", player.id);
-        localStorage.setItem(`playerId:${room.code}`, player.id);
-        router.push(`/room/${room.code}`);
+        await switchRoomToWhosDoneIt(
+          snapshot.room.id,
+          me.id,
+          getStoredWhosDoneItHostSettings(),
+        );
+        window.location.reload();
       } catch (issue) {
         setActionError(issue instanceof Error ? issue.message : "Could not switch games.");
       } finally {
         setChangingGame(null);
       }
     },
-    [me, router, snapshot],
+    [me, snapshot],
   );
 
   const handleSaveProfile = useCallback(async () => {
@@ -771,6 +765,19 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
       setLinkCopied(false);
     }
   }, [normalizedCode]);
+
+  const openRoomSettings = useCallback(() => {
+    setSettingsDraft({
+      teamCount: snapshot.room.team_count,
+      cardsPerPlayer: snapshot.state.cards_per_player,
+      roundCount: snapshot.state.round_count,
+      turnSeconds: snapshot.state.turn_seconds,
+    });
+    setTeamNameDraft(
+      typeof me?.team_index === "number" ? getTeamName(snapshot.room, me.team_index) : "",
+    );
+    setSettingsOpen(true);
+  }, [me?.team_index, snapshot.room, snapshot.state]);
 
   const queueTurnAction = useCallback(
     (action: TurnCardAction) => {
@@ -1046,8 +1053,6 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
   const currentRoundNumber = snapshot.state.current_round_index + 1;
   const roundSummaryTeams = buildRoundSummaryTeams(snapshot);
   const canStart = hasReadyTeams(snapshot.players, snapshot.room.team_count);
-  const currentTeamName =
-    typeof me.team_index === "number" ? getTeamName(snapshot.room, me.team_index) : "";
   const totalDraftTarget = snapshot.players.length * snapshot.state.cards_per_player;
   const doneDrafting =
     myDraftCount >= snapshot.state.cards_per_player ||
@@ -1087,6 +1092,8 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
   ).length;
   const allowHostControls = me.is_host && snapshot.room.phase === "lobby";
   const playStageBusy = Boolean(busyAction) || pendingTurnActions > 0;
+  const isLobby = snapshot.room.phase === "lobby";
+  const showTopBar = isLobby || Boolean(actionError);
 
   return (
     <main className="app-page">
@@ -1098,64 +1105,80 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
             icon: "home",
             onClick: () => router.push("/"),
           }}
-          rightAction={{
-            label: "Game info",
-            icon: "info",
-            onClick: () => setInfoOpen(true),
-          }}
+          rightAction={
+            isLobby
+              ? {
+                  label: "Game info",
+                  icon: "info",
+                  onClick: () => setInfoOpen(true),
+                }
+              : undefined
+          }
+          rightContent={
+            isLobby ? undefined : (
+              <RoomHeaderMenu
+                codeCopied={linkCopied}
+                onCopyRoomLink={handleCopyRoomLink}
+                onOpenInfo={() => setInfoOpen(true)}
+                onOpenProfile={openProfileSettings}
+                onOpenSettings={openRoomSettings}
+                roomCode={snapshot.room.code}
+                settingsHint={me.is_host ? "Room and team controls" : "Team name and room details"}
+              />
+            )
+          }
         />
 
         <div className="flex min-h-0 flex-1 flex-col gap-2 pt-2">
-          <section className="-mx-[var(--card-padding)] border-b border-slate-200 px-[var(--card-padding)] pb-2">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <button
-                  aria-label={linkCopied ? "Room link copied" : "Copy room link"}
-                  className={`rounded-lg px-1 text-base font-black tracking-[0.08em] transition-colors sm:text-lg ${
-                    linkCopied ? "text-emerald-600" : "text-slate-950"
-                  }`}
-                  onClick={() => void handleCopyRoomLink()}
-                  title={linkCopied ? "Copied" : "Click to copy room link"}
-                  type="button"
-                >
-                  {snapshot.room.code}
-                </button>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  aria-label="Profile settings"
-                  className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-700 transition hover:border-slate-400 hover:text-slate-950"
-                  onClick={openProfileSettings}
-                  type="button"
-                >
-                  <EditIcon />
-                </button>
-                <button
-                  aria-label="Room settings"
-                  className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-700 transition hover:border-slate-400 hover:text-slate-950"
-                  onClick={() => {
-                    setSettingsDraft({
-                      teamCount: snapshot.room.team_count,
-                      cardsPerPlayer: snapshot.state.cards_per_player,
-                      roundCount: snapshot.state.round_count,
-                      turnSeconds: snapshot.state.turn_seconds,
-                    });
-                    setTeamNameDraft(currentTeamName);
-                    setSettingsOpen(true);
-                  }}
-                  type="button"
-                >
-                  <SettingsIcon />
-                </button>
-              </div>
-            </div>
+          {showTopBar ? (
+            <section className="-mx-[var(--card-padding)] border-b border-slate-200 bg-white px-[var(--card-padding)] pb-2">
+              {isLobby ? (
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <button
+                      aria-label={linkCopied ? "Room link copied" : "Copy room link"}
+                      className={`rounded-lg px-1 text-base font-black tracking-[0.08em] transition-colors sm:text-lg ${
+                        linkCopied ? "text-emerald-600" : "text-slate-950"
+                      }`}
+                      onClick={() => void handleCopyRoomLink()}
+                      title={linkCopied ? "Copied" : "Click to copy room link"}
+                      type="button"
+                    >
+                      {snapshot.room.code}
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      aria-label="Profile settings"
+                      className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-700 transition hover:border-slate-400 hover:text-slate-950"
+                      onClick={openProfileSettings}
+                      type="button"
+                    >
+                      <EditIcon />
+                    </button>
+                    <button
+                      aria-label="Room settings"
+                      className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-700 transition hover:border-slate-400 hover:text-slate-950"
+                      onClick={openRoomSettings}
+                      type="button"
+                    >
+                      <SettingsIcon />
+                    </button>
+                  </div>
+                </div>
+              ) : null}
 
-            {actionError ? (
-              <p className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-                {actionError}
-              </p>
-            ) : null}
-          </section>
+              {actionError ? (
+                <p
+                  className={`rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 ${
+                    isLobby ? "mt-3" : ""
+                  }`}
+                >
+                  {actionError}
+                </p>
+              ) : null}
+            </section>
+          ) : null}
 
           {snapshot.room.phase === "lobby" ? (
             <LobbyStage
@@ -1259,9 +1282,9 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
                   await startPlayerTurn(snapshot.room.id, me.id);
                 })
               }
-              onSkipRound={() =>
-                runAction("skip-round", async () => {
-                  await skipRound(snapshot.room.id, me.id);
+              onSkipTurn={() =>
+                runAction("skip-turn", async () => {
+                  await skipTurn(snapshot.room.id, me.id);
                 })
               }
               onTogglePause={() =>

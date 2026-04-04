@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { EntryProfileForm } from "@/components/entry-profile-form";
+import { RoomLoadingScreen } from "@/components/room-loading-screen";
 import { getGameBySlug } from "@/lib/game-catalog";
 import { createRoom } from "@/lib/games/whosdoneit/game";
 import {
@@ -104,27 +105,27 @@ export function WhosDoneItCreateRoomScreen() {
       });
   }, [router]);
 
+  if (needsProfile !== true) {
+    return (
+      <RoomLoadingScreen
+        message={needsProfile === null ? "Loading your setup..." : "Creating your room..."}
+      />
+    );
+  }
+
   return (
     <main className="app-page">
-      {needsProfile === true ? (
-        <EntryProfileForm
-          bannerLabel={GAME?.name}
-          error={error}
-          initialColor={defaults.color}
-          initialEmoji={defaults.emoji}
-          initialName={defaults.name}
-          loading={loading}
-          onSubmit={handleCreateRoom}
-          submitLabel="Create"
-          title={`Create ${GAME?.shortName ?? "Game"} Room`}
-        />
-      ) : (
-        <div className="app-page-card app-page-card-wide app-page-card-mobile-fill flex flex-col">
-          <p className="m-auto text-center text-lg font-bold text-slate-700">
-            {needsProfile === null ? "Loading..." : "Creating your room..."}
-          </p>
-        </div>
-      )}
+      <EntryProfileForm
+        bannerLabel={GAME?.name}
+        error={error}
+        initialColor={defaults.color}
+        initialEmoji={defaults.emoji}
+        initialName={defaults.name}
+        loading={loading}
+        onSubmit={handleCreateRoom}
+        submitLabel="Create"
+        title={`Create ${GAME?.shortName ?? "Game"} Room`}
+      />
     </main>
   );
 }

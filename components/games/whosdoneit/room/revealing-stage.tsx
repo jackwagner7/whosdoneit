@@ -11,12 +11,13 @@ const REVEAL_WAIT_MS = {
   quick: 240,
   normal: 560,
   dramatic: 1300,
+  suspense: 1900,
 } as const;
 
 const MAJORITY_THRESHOLD = 0.79;
 
 type WaitKey = keyof typeof REVEAL_WAIT_MS;
-const PRE_GUESS_WAIT_KEY: WaitKey = "dramatic";
+const PRE_GUESS_WAIT_KEY: WaitKey = "suspense";
 type RevealPattern =
   | "all_innocent_innocent"
   | "all_innocent_guilty"
@@ -341,12 +342,12 @@ export function RevealingStage({
   const displayRows = truthShown ? guessRows : visibleGuessRows;
   const innocentRows = displayRows.filter((row) => row.guessedAnswer === false);
   const guiltyRows = displayRows.filter((row) => row.guessedAnswer === true);
-  const truthToneClass =
+  const truthBadgeClass =
     truthShown && typeof truth === "boolean"
       ? truth
-        ? "text-rose-700"
-        : "text-sky-700"
-      : "text-slate-700";
+        ? "border border-rose-300 bg-rose-100 text-rose-800"
+        : "border border-sky-300 bg-sky-100 text-sky-800"
+      : "border border-slate-300 bg-slate-100 text-slate-700";
   const innocentPanelClass =
     truthShown && truth === false
       ? "min-w-0 rounded-2xl border-2 border-sky-400 bg-sky-200 p-3"
@@ -359,22 +360,35 @@ export function RevealingStage({
   return (
     <StageShell>
       <StageHeader title="Trial" />
-      <p className="mt-3 rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-xl font-black text-slate-900 sm:text-2xl">
+      <p className="mt-3 px-4 text-center text-xl font-black text-slate-900 sm:text-2xl">
         {prompt}
+      </p>
+      <p className="mt-4 text-center text-sm font-semibold uppercase tracking-[0.12em] text-slate-500 sm:text-base">
+        Have they done it?
       </p>
       <div className="mt-3 flex justify-center">
         <PlayerBox color={target.color} emoji={target.emoji} name={target.name} />
       </div>
-      <p className={`mt-2 text-center text-lg font-bold ${truthToneClass}`}>
-        {truthShown ? `${truth ? "Guilty" : "Innocent"}` : "???"}
+      <div className="mt-3 flex justify-center">
+        <p
+          className={`inline-flex min-w-[8.5rem] items-center justify-center rounded-full px-4 py-2 text-sm font-black uppercase tracking-[0.18em] sm:text-base ${truthBadgeClass}`}
+        >
+          {truthShown ? `${truth ? "GUILTY" : "INNOCENT"}` : "???"}
+        </p>
+      </div>
+      <p className="mt-4 text-center text-sm font-semibold uppercase tracking-[0.12em] text-slate-500 sm:text-base">
+        Detective Guesses
       </p>
-      <p className="stage-subheading mt-3 text-center">Guesses:</p>
       <div className="mt-3 min-h-0 flex-1 overflow-y-auto overflow-x-hidden pr-1">
         <div className="relative flex items-start gap-4">
           <div aria-hidden="true" className="pointer-events-none absolute bottom-0 left-1/2 top-0 w-px -translate-x-1/2 bg-slate-200" />
 
           <div className={`min-w-0 flex-1 ${innocentPanelClass}`}>
-            <p className="stage-subheading text-center font-black">Innocent</p>
+            <div className="flex justify-center">
+              <p className="inline-flex rounded-full border border-sky-300 bg-white/70 px-3 py-1 text-xs font-black uppercase tracking-[0.16em] text-sky-800">
+                INNOCENT
+              </p>
+            </div>
             <ul className="mt-2 grid gap-2">
               {innocentRows.map((row) => (
                 <li className="flex justify-center" key={row.id}>
@@ -390,7 +404,11 @@ export function RevealingStage({
           </div>
 
           <div className={`min-w-0 flex-1 ${guiltyPanelClass}`}>
-            <p className="stage-subheading text-center font-black">Guilty</p>
+            <div className="flex justify-center">
+              <p className="inline-flex rounded-full border border-rose-300 bg-white/70 px-3 py-1 text-xs font-black uppercase tracking-[0.16em] text-rose-800">
+                GUILTY
+              </p>
+            </div>
             <ul className="mt-2 grid gap-2">
               {guiltyRows.map((row) => (
                 <li className="flex justify-center" key={row.id}>

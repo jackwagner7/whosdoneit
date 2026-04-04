@@ -5,6 +5,7 @@ import {
 } from "@/lib/player-color-pool";
 import { PLAYER_EMOJI_POOL } from "@/lib/player-emoji-pool";
 import { supabase } from "@/lib/supabase";
+import type { SayLessRoomSettings } from "@/types/sayless";
 import type {
   Confession,
   GameSnapshot,
@@ -681,6 +682,21 @@ export async function updateRoomSettings(
     p_guessing_seconds: settings.guessingSeconds,
     p_reveal_seconds: settings.revealSeconds,
     p_fast_mode: settings.fastMode,
+  });
+}
+
+export async function switchRoomToSayLess(
+  roomId: string,
+  playerId: string,
+  settings: Partial<SayLessRoomSettings>,
+) {
+  await callRpc("whd_switch_room_to_sayless", {
+    p_room_id: roomId,
+    p_player_id: playerId,
+    p_team_count: settings.teamCount,
+    p_cards_per_player: settings.cardsPerPlayer,
+    p_round_count: settings.roundCount,
+    p_turn_seconds: settings.turnSeconds,
   });
 }
 

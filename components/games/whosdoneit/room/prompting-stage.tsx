@@ -145,10 +145,10 @@ export function PromptingStage({
         ]}
         title="Prompt"
       />
-      <p className="stage-subheading mt-1">
-        Write one short prompt everyone can answer yes or no.
-      </p>
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4">
+        <p className="stage-subheading text-center">
+          Write a <i>never-have-I-ever</i> style yes/no question.
+        </p>
         <div className="w-full max-w-2xl">
           <input
             className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-lg font-semibold outline-none focus:border-black sm:text-xl"
@@ -159,18 +159,21 @@ export function PromptingStage({
             value={promptText}
           />
         </div>
-        <div className="flex w-full max-w-3xl flex-wrap items-center justify-center gap-2">
-          {quickPrompts.map((quickPrompt) => (
-            <button
-              key={quickPrompt}
-              className="rounded-full border border-slate-300 px-3 py-1 text-sm font-semibold text-slate-700 transition hover:border-slate-900 hover:text-black disabled:opacity-60"
-              disabled={busy}
-              onClick={() => onPromptTextChange(quickPrompt)}
-              type="button"
-            >
-              {quickPrompt}
-            </button>
-          ))}
+        <div className="flex w-full max-w-3xl flex-col items-center gap-2">
+          <p className="stage-heading">Examples</p>
+          <div className="flex w-full flex-wrap items-center justify-center gap-2">
+            {quickPrompts.map((quickPrompt) => (
+              <button
+                key={quickPrompt}
+                className="rounded-full border border-slate-300 px-3 py-1 text-sm font-semibold text-slate-700 transition hover:border-slate-900 hover:text-black disabled:opacity-60"
+                disabled={busy}
+                onClick={() => onPromptTextChange(quickPrompt)}
+                type="button"
+              >
+                {quickPrompt}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
       <StageFooter>
