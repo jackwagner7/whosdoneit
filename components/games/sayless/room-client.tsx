@@ -767,6 +767,10 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
   }, [normalizedCode]);
 
   const openRoomSettings = useCallback(() => {
+    if (!snapshot) {
+      return;
+    }
+
     setSettingsDraft({
       teamCount: snapshot.room.team_count,
       cardsPerPlayer: snapshot.state.cards_per_player,
@@ -777,7 +781,7 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
       typeof me?.team_index === "number" ? getTeamName(snapshot.room, me.team_index) : "",
     );
     setSettingsOpen(true);
-  }, [me?.team_index, snapshot.room, snapshot.state]);
+  }, [me?.team_index, snapshot]);
 
   const queueTurnAction = useCallback(
     (action: TurnCardAction) => {

@@ -551,7 +551,7 @@ export function RoomClient({ code, initialSnapshot = null }: RoomClientProps) {
   }, [normalizedCode]);
 
   const openRoomSettings = useCallback(() => {
-    if (!me?.is_host) {
+    if (!snapshot || !me?.is_host) {
       return;
     }
 
@@ -564,7 +564,7 @@ export function RoomClient({ code, initialSnapshot = null }: RoomClientProps) {
       fastMode: snapshot.room.fast_mode === true,
     });
     setSettingsOpen(true);
-  }, [me, snapshot.room]);
+  }, [me, snapshot]);
 
   if (loading) {
     return <RoomLoadingScreen message="Loading room..." />;
