@@ -31,6 +31,7 @@ type RoundSummaryStageProps = {
   summaries: TeamSummary[];
   hostPlayer: SayLessPlayer | null;
   isHost: boolean;
+  isTeamless?: boolean;
   busy: boolean;
   onContinue: () => Promise<void>;
 };
@@ -105,13 +106,14 @@ export function RoundSummaryStage({
   summaries,
   hostPlayer,
   isHost,
+  isTeamless = false,
   busy,
   onContinue,
 }: RoundSummaryStageProps) {
   return (
     <StageShell>
       <StageHeader
-        title={`Round ${roundNumber} Scores`}
+        title={isTeamless ? `Round ${roundNumber} Results` : `Round ${roundNumber} Scores`}
         trackingItems={[{ label: "Rounds", value: `${roundNumber}/${roundCount}` }]}
       />
 

@@ -7,6 +7,8 @@ const DEFAULT_HOST_SETTINGS: SayLessRoomSettings = {
   cardsPerPlayer: 8,
   roundCount: 3,
   turnSeconds: 60,
+  draftMode: "manual",
+  hostPhoneOnly: false,
 };
 
 export function getDefaultHostSettings(): SayLessRoomSettings {
@@ -25,11 +27,11 @@ function normalizeSettings(
   settings?: Partial<SayLessRoomSettings> | null,
 ): SayLessRoomSettings {
   return {
-    teamCount: clamp(Number(settings?.teamCount), 2, 5, DEFAULT_HOST_SETTINGS.teamCount),
+    teamCount: clamp(Number(settings?.teamCount), 1, 5, DEFAULT_HOST_SETTINGS.teamCount),
     cardsPerPlayer: clamp(
       Number(settings?.cardsPerPlayer),
       3,
-      12,
+      20,
       DEFAULT_HOST_SETTINGS.cardsPerPlayer,
     ),
     roundCount: clamp(Number(settings?.roundCount), 1, 5, DEFAULT_HOST_SETTINGS.roundCount),
@@ -39,6 +41,11 @@ function normalizeSettings(
       180,
       DEFAULT_HOST_SETTINGS.turnSeconds,
     ),
+    draftMode:
+      settings?.draftMode === "autodraft" || settings?.draftMode === "draftless"
+        ? settings.draftMode
+        : DEFAULT_HOST_SETTINGS.draftMode,
+    hostPhoneOnly: settings?.hostPhoneOnly === true,
   };
 }
 

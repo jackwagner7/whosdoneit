@@ -29,6 +29,7 @@ type PlayingStageProps = {
   card: SayLessRoomCard | null;
   roundNumber: number;
   roundCount: number;
+  infiniteCards?: boolean;
   remainingCards: number;
   totalCards: number;
   busy: boolean;
@@ -98,6 +99,7 @@ export function PlayingStage({
   card,
   roundNumber,
   roundCount,
+  infiniteCards = false,
   remainingCards,
   totalCards,
   busy,
@@ -109,7 +111,10 @@ export function PlayingStage({
 }: PlayingStageProps) {
   const trackingItems: TrackingStatItem[] = [
     { label: "Rounds", value: `${roundNumber}/${roundCount}` },
-    { label: "Cards left", value: `${remainingCards}/${totalCards}` },
+    {
+      label: infiniteCards ? "Cards" : "Cards left",
+      value: infiniteCards ? "Infinite" : `${remainingCards}/${totalCards}`,
+    },
   ];
   const canControlTurn = turnStarted && (meIsActive || isHost);
   const canPauseTurn = canControlTurn && !turnPaused;

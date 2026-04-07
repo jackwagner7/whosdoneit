@@ -54,7 +54,7 @@ create table if not exists public.sayless_room_state (
   turn_deadline_at timestamptz,
   team_turn_counts integer[] not null default array[]::integer[],
   created_at timestamptz not null default now(),
-  constraint sayless_room_state_cards_per_player_check check (cards_per_player between 3 and 12),
+  constraint sayless_room_state_cards_per_player_check check (cards_per_player between 3 and 20),
   constraint sayless_room_state_round_count_check check (round_count between 1 and 5),
   constraint sayless_room_state_turn_seconds_check check (turn_seconds between 15 and 180)
 );

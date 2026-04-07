@@ -7,6 +7,8 @@ export type SayLessPhase =
   | "round_summary"
   | "finished";
 
+export type SayLessDraftMode = "manual" | "autodraft" | "draftless";
+
 export type SayLessRoom = {
   id: string;
   code: string;
@@ -94,6 +96,8 @@ export type SayLessRoomState = {
   cards_per_player: number;
   round_count: number;
   turn_seconds: number;
+  draft_mode: SayLessDraftMode;
+  host_phone_only: boolean;
   current_round_index: number;
   starting_team_index: number;
   active_team_index: number;
@@ -119,6 +123,8 @@ export type SayLessRoomSettings = {
   cardsPerPlayer: number;
   roundCount: number;
   turnSeconds: number;
+  draftMode: SayLessDraftMode;
+  hostPhoneOnly: boolean;
 };
 
 export type SayLessDraftBatchResponse = {

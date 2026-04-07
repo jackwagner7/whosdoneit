@@ -1,10 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CountdownBadge } from "@/components/countdown-badge";
 import { PlayerBox } from "@/components/player-box";
 import { StageMetaBar } from "@/components/games/whosdoneit/room/stage-meta-bar";
-import { StageFooter } from "@/components/stage-footer";
+import { StageFooter, StageFooterButton } from "@/components/stage-footer";
 import { StageShell } from "@/components/stage-shell";
 import type { Player } from "@/types/whosdoneit";
 
@@ -120,22 +119,14 @@ export function GuessingStage({
         </div>
       </div>
       <StageFooter>
-        <button
-          className="grid w-full grid-cols-[4.75rem_1fr_4.75rem] items-stretch overflow-hidden rounded-2xl bg-black text-xl font-bold text-white disabled:opacity-60"
+        <StageFooterButton
+          busy={busy}
           disabled={busy}
+          deadlineAt={deadlineAt}
           onClick={() => void onSubmit(selectedTargetIds)}
-          type="button"
         >
-          <span aria-hidden="true" />
-          <span className="flex items-center justify-center px-4 py-3 text-center">
-            {busy ? "..." : "Submit"}
-          </span>
-          {!busy ? (
-            <CountdownBadge deadlineAt={deadlineAt} variant="button-dark" />
-          ) : (
-            <span aria-hidden="true" className="border-l border-white/20" />
-          )}
-        </button>
+          {busy ? "..." : "Submit"}
+        </StageFooterButton>
       </StageFooter>
     </StageShell>
   );

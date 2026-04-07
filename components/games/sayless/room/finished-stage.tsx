@@ -19,6 +19,7 @@ type FinishedStageProps = {
   summaries: TeamSummary[];
   hostPlayer: SayLessPlayer | null;
   isHost: boolean;
+  isTeamless?: boolean;
   busy: boolean;
   onPlayAgain: () => Promise<void>;
 };
@@ -27,6 +28,7 @@ export function FinishedStage({
   summaries,
   hostPlayer,
   isHost,
+  isTeamless = false,
   busy,
   onPlayAgain,
 }: FinishedStageProps) {
@@ -47,19 +49,21 @@ export function FinishedStage({
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">
-                  Team {team.teamIndex + 1}
+                  {isTeamless ? "Player" : `Team ${team.teamIndex + 1}`}
                 </p>
                 <h3 className="mt-1 text-2xl font-black text-slate-950">{team.teamName}</h3>
               </div>
               <p className="text-3xl font-black text-slate-950">{team.totalScore}</p>
             </div>
 
-            <p className="mt-4 text-sm font-medium text-slate-600">
-              Top player:{" "}
-              <span className="font-black text-slate-900">
-                {team.topPlayerName ? `${team.topPlayerName} (${team.topPlayerScore})` : "None yet"}
-              </span>
-            </p>
+            {!isTeamless ? (
+              <p className="mt-4 text-sm font-medium text-slate-600">
+                Top player:{" "}
+                <span className="font-black text-slate-900">
+                  {team.topPlayerName ? `${team.topPlayerName} (${team.topPlayerScore})` : "None yet"}
+                </span>
+              </p>
+            ) : null}
           </article>
         ))}
       </div>

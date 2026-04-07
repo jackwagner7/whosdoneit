@@ -1,10 +1,12 @@
 "use client";
 
+import { PlayerBox } from "@/components/player-box";
 import { StageShell } from "@/components/stage-shell";
 import { StageHeader } from "@/components/stage-header";
 import type { SayLessCard } from "@/types/sayless";
 import { SwipeCard } from "@/components/games/sayless/room/swipe-card";
 import type { TrackingStatItem } from "@/components/tracking-stat";
+import type { SayLessPlayer } from "@/types/sayless";
 
 type DraftingStageProps = {
   card: SayLessCard | null;
@@ -16,6 +18,10 @@ type DraftingStageProps = {
   doneDrafting: boolean;
   busy: boolean;
   loadingCard: boolean;
+  draftingLabel?: string;
+  selectedPlayerName?: string | null;
+  selectablePlayers?: SayLessPlayer[];
+  onSelectPlayer?: (playerId: string) => void;
   onSkip: () => Promise<void>;
   onKeep: () => Promise<void>;
 };
@@ -30,12 +36,17 @@ export function DraftingStage({
   doneDrafting,
   busy,
   loadingCard,
+  draftingLabel = "Your picks",
+  selectedPlayerName = null,
+  selectablePlayers = [],
+  onSelectPlayer,
   onSkip,
   onKeep,
 }: DraftingStageProps) {
   const showLoadingPlaceholder = loadingCard && !card;
+  const showPlayerPicker = selectablePlayers.length > 0 && !selectedPlayerName;
   const trackingItems: TrackingStatItem[] = [
-    { label: "Your picks", value: `${draftedCount}/${targetCount}` },
+    { label: draftingLabel, value: `${draftedCount}/${targetCount}` },
     { label: "Room deck", value: `${totalDrafted}/${totalTarget}` },
     { label: "Dupes", value: String(duplicateCount) },
   ];
@@ -44,7 +55,30 @@ export function DraftingStage({
     <StageShell className="overflow-y-auto">
       <StageHeader title="Draft" trackingItems={trackingItems} />
 
-      {showLoadingPlaceholder ? (
+      {showPlayerPicker ? (
+        <div className="mt-5 flex min-h-0 flex-1">
+          <div className="flex min-h-0 flex-1 flex-col rounded-3xl border border-slate-200 bg-slate-50 px-5 py-6">
+            <p className="text-lg font-black text-slate-950">Choose a player to draft for.</p>
+            <p className="mt-2 text-sm font-medium leading-6 text-slate-600">
+              Select someone who still needs cards.
+            </p>
+            <div className="mt-4 grid gap-2">
+              {selectablePlayers.map((player) => (
+                <button
+                  className="flex items-center justify-center rounded-2xl border border-slate-300 bg-white px-4 py-3 text-left transition hover:border-slate-400"
+                  key={player.id}
+                  onClick={() => onSelectPlayer?.(player.id)}
+                  type="button"
+                >
+                  <PlayerBox color={player.color} emoji={player.emoji} name={player.name} />
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {showLoadingPlaceholder && !showPlayerPicker ? (
         <div className="mt-5 flex min-h-0 flex-1">
           <div className="flex min-h-0 flex-1 flex-col gap-3">
             <div className="flex min-h-[18rem] flex-1 flex-col items-center justify-center rounded-3xl border border-slate-200 bg-slate-50 px-5 py-8 text-center">
@@ -74,7 +108,7 @@ export function DraftingStage({
         </div>
       ) : null}
 
-      {card ? (
+      {card && !showPlayerPicker ? (
         <div className="mt-5 flex min-h-0 flex-1">
           <div className="relative flex min-h-0 flex-1">
             <SwipeCard
@@ -105,7 +139,7 @@ export function DraftingStage({
         </div>
       ) : null}
 
-      {!showLoadingPlaceholder && !card && doneDrafting ? (
+      {!showLoadingPlaceholder && !card && doneDrafting && !showPlayerPicker ? (
         <div className="mt-5 flex min-h-0 flex-1">
           <div className="flex min-h-[18rem] flex-1 flex-col justify-center rounded-3xl border border-slate-200 bg-slate-50 px-5 py-6">
             <p className="text-lg font-black text-slate-950">You are done drafting.</p>
@@ -116,7 +150,7 @@ export function DraftingStage({
         </div>
       ) : null}
 
-      {!showLoadingPlaceholder && !card && !doneDrafting ? (
+      {!showLoadingPlaceholder && !card && !doneDrafting && !showPlayerPicker ? (
         <div className="mt-5 flex min-h-0 flex-1">
           <div className="flex min-h-[18rem] flex-1 flex-col items-center justify-center rounded-3xl border border-slate-200 bg-slate-50 px-5 py-8 text-center">
             <div

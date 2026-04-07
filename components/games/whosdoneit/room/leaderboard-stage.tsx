@@ -1,7 +1,7 @@
 "use client";
 
 import { PlayerBox } from "@/components/player-box";
-import { StageFooter, StageFooterMessage } from "@/components/stage-footer";
+import { StageFooter, StageFooterButton, StageFooterMessage } from "@/components/stage-footer";
 import { StageHeader } from "@/components/stage-header";
 import { StageShell } from "@/components/stage-shell";
 import type { Player } from "@/types/whosdoneit";
@@ -119,14 +119,12 @@ export function LeaderboardStage({
       </div>
       {isHost ? (
         <StageFooter>
-          <button
-            className="w-full rounded-2xl bg-black px-4 py-3 text-xl font-bold text-white disabled:opacity-60"
+          <StageFooterButton
             disabled={busy}
             onClick={() => void onContinue()}
-            type="button"
           >
             {busy ? "..." : hasNextRound ? "Next" : "Final standings"}
-          </button>
+          </StageFooterButton>
         </StageFooter>
       ) : (
         <StageFooterMessage>

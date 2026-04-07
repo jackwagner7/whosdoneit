@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { EntryProfileForm } from "@/components/entry-profile-form";
 import { RoomLoadingScreen } from "@/components/room-loading-screen";
 import { getGameBySlug } from "@/lib/game-catalog";
-import { createRoom } from "@/lib/games/sayless/game";
+import { createRoom, getRecommendedCardsPerPlayer } from "@/lib/games/sayless/game";
 import {
   getDefaultHostSettings,
   getStoredHostSettings,
@@ -28,6 +28,14 @@ export function SayLessCreateRoomScreen() {
   const attemptedAutoCreateRef = useRef(false);
   const router = useRouter();
 
+  const getRecommendedHostSettings = useCallback(
+    () => ({
+      ...hostSettings,
+      cardsPerPlayer: getRecommendedCardsPerPlayer(1),
+    }),
+    [hostSettings],
+  );
+
   const handleCreateRoom = useCallback(
     async (values: {
       name: string;
@@ -38,10 +46,11 @@ export function SayLessCreateRoomScreen() {
       setLoading(true);
       setError(null);
       try {
+        const recommendedSettings = getRecommendedHostSettings();
         const { room, player } = await createRoom(values.name.trim(), {
           playerColor: values.color,
           playerEmoji: values.emoji,
-          settings: hostSettings,
+          settings: recommendedSettings,
         });
         setStoredPlayerPreferences({
           name: player.name,
@@ -58,14 +67,17 @@ export function SayLessCreateRoomScreen() {
         setLoading(false);
       }
     },
-    [hostSettings, router],
+    [getRecommendedHostSettings, router],
   );
 
   useEffect(() => {
     const storedPreferences = getStoredPlayerPreferences();
     const storedHostSettings = getStoredHostSettings();
     setDefaults(storedPreferences);
-    setHostSettings(storedHostSettings);
+    setHostSettings({
+      ...storedHostSettings,
+      cardsPerPlayer: getRecommendedCardsPerPlayer(1),
+    });
 
     if (!hasStoredPlayerPreferences()) {
       setNeedsProfile(true);
@@ -80,10 +92,15 @@ export function SayLessCreateRoomScreen() {
     setLoading(true);
     setError(null);
 
+    const recommendedSettings = {
+      ...storedHostSettings,
+      cardsPerPlayer: getRecommendedCardsPerPlayer(1),
+    };
+
     void createRoom(storedPreferences.name.trim(), {
       playerColor: storedPreferences.color,
       playerEmoji: storedPreferences.emoji,
-      settings: storedHostSettings,
+      settings: recommendedSettings,
     })
       .then(({ room, player }) => {
         setStoredPlayerPreferences({

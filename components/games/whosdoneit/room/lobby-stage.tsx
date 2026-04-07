@@ -1,7 +1,7 @@
 "use client";
 
 import { PlayerBox } from "@/components/player-box";
-import { StageFooter, StageFooterMessage } from "@/components/stage-footer";
+import { StageFooter, StageFooterButton, StageFooterMessage } from "@/components/stage-footer";
 import { StageHeader } from "@/components/stage-header";
 import { StageShell } from "@/components/stage-shell";
 import type { Player } from "@/types/whosdoneit";
@@ -57,14 +57,13 @@ export function LobbyStage({
 
       {isHost ? (
         <StageFooter>
-          <button
-            className="w-full rounded-2xl bg-black px-5 py-3 text-xl font-bold text-white disabled:opacity-50 sm:text-2xl"
+          <StageFooterButton
+            className="px-5 disabled:opacity-50 sm:text-2xl"
             disabled={!canStart || busy}
             onClick={() => void onStart()}
-            type="button"
           >
             {busy ? "..." : "Start"}
-          </button>
+          </StageFooterButton>
         </StageFooter>
       ) : (
         <StageFooterMessage>

@@ -11,7 +11,7 @@ returns integer
 language sql
 immutable
 as $$
-  select least(greatest(coalesce(p_value, 8), 3), 12);
+  select least(greatest(coalesce(p_value, 8), 3), 20);
 $$;
 
 create or replace function public.sl_sanitize_round_count(p_value integer)

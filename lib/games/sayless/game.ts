@@ -9,6 +9,7 @@ import { supabase } from "@/lib/supabase";
 import type { RoomSettings } from "@/types/whosdoneit";
 import type {
   SayLessCard,
+  SayLessDraftMode,
   SayLessDraftBatchResponse,
   SayLessDraftRejection,
   SayLessPlayer,
@@ -19,21 +20,24 @@ import type {
   SayLessRoundResult,
   SayLessSnapshot,
 } from "@/types/sayless";
-const MIN_TEAMS = 2;
+const MIN_TEAMS = 1;
 const MAX_TEAMS = 5;
 const MIN_CARDS_PER_PLAYER = 3;
-const MAX_CARDS_PER_PLAYER = 12;
+const MAX_CARDS_PER_PLAYER = 20;
 const MIN_ROUNDS = 1;
 const MAX_ROUNDS = 5;
 const MIN_TURN_SECONDS = 15;
 const MAX_TURN_SECONDS = 180;
 const TEST_BOT_NAME_PREFIX = "Test Bot";
+export const SAY_LESS_TARGET_DRAFTED_CARDS = 50;
 
 const DEFAULT_ROOM_SETTINGS: SayLessRoomSettings = {
   teamCount: 2,
   cardsPerPlayer: 8,
   roundCount: 3,
   turnSeconds: 60,
+  draftMode: "manual",
+  hostPhoneOnly: false,
 };
 
 const TEAM_NAME_POOL = [
@@ -160,6 +164,14 @@ function sanitizeTurnSeconds(value?: number) {
   );
 }
 
+function sanitizeDraftMode(value?: SayLessDraftMode | string | null): SayLessDraftMode {
+  return value === "autodraft" || value === "draftless" ? value : "manual";
+}
+
+function sanitizeHostPhoneOnly(value?: boolean | null) {
+  return value === true;
+}
+
 function sanitizePausedTurnSecondsRemaining(value?: number | null) {
   if (typeof value !== "number" || !Number.isFinite(value)) {
     return null;
@@ -174,6 +186,8 @@ function sanitizeSettings(settings?: Partial<SayLessRoomSettings>): SayLessRoomS
     cardsPerPlayer: sanitizeCardsPerPlayer(settings?.cardsPerPlayer),
     roundCount: sanitizeRoundCount(settings?.roundCount),
     turnSeconds: sanitizeTurnSeconds(settings?.turnSeconds),
+    draftMode: sanitizeDraftMode(settings?.draftMode),
+    hostPhoneOnly: sanitizeHostPhoneOnly(settings?.hostPhoneOnly),
   };
 }
 
@@ -257,6 +271,8 @@ function createDefaultState(room: SayLessRoom): Omit<SayLessRoomState, "created_
     cards_per_player: DEFAULT_ROOM_SETTINGS.cardsPerPlayer,
     round_count: DEFAULT_ROOM_SETTINGS.roundCount,
     turn_seconds: DEFAULT_ROOM_SETTINGS.turnSeconds,
+    draft_mode: DEFAULT_ROOM_SETTINGS.draftMode,
+    host_phone_only: DEFAULT_ROOM_SETTINGS.hostPhoneOnly,
     current_round_index: 0,
     starting_team_index: 0,
     active_team_index: 0,
@@ -275,6 +291,10 @@ function normalizeState(room: SayLessRoom, state: SayLessRoomState | null) {
     cards_per_player: sanitizeCardsPerPlayer(state?.cards_per_player),
     round_count: sanitizeRoundCount(state?.round_count),
     turn_seconds: sanitizeTurnSeconds(state?.turn_seconds),
+    draft_mode: sanitizeDraftMode((state as Partial<SayLessRoomState> | null)?.draft_mode),
+    host_phone_only: sanitizeHostPhoneOnly(
+      (state as Partial<SayLessRoomState> | null)?.host_phone_only,
+    ),
     current_round_index: Math.max(0, Math.round(state?.current_round_index ?? 0)),
     starting_team_index: clampNumber(
       Number(state?.starting_team_index ?? 0),
@@ -391,6 +411,40 @@ export function getDefaultRoomSettings() {
   return { ...DEFAULT_ROOM_SETTINGS };
 }
 
+export function getTotalDraftedCards(playerCount: number, cardsPerPlayer: number) {
+  return Math.max(1, Math.round(Number(playerCount) || 0)) * sanitizeCardsPerPlayer(cardsPerPlayer);
+}
+
+export function getCardsPerPlayerForDraftedCards(playerCount: number, draftedCards: number) {
+  const safePlayerCount = Math.max(1, Math.round(Number(playerCount) || 0));
+  const targetTotal = Math.max(1, Math.round(Number(draftedCards) || 0));
+  let bestCardsPerPlayer = MIN_CARDS_PER_PLAYER;
+  let bestDistance = Number.POSITIVE_INFINITY;
+
+  for (
+    let cardsPerPlayer = MIN_CARDS_PER_PLAYER;
+    cardsPerPlayer <= MAX_CARDS_PER_PLAYER;
+    cardsPerPlayer += 1
+  ) {
+    const totalCards = safePlayerCount * cardsPerPlayer;
+    const distance = Math.abs(totalCards - targetTotal);
+
+    if (
+      distance < bestDistance ||
+      (distance === bestDistance && cardsPerPlayer < bestCardsPerPlayer)
+    ) {
+      bestCardsPerPlayer = cardsPerPlayer;
+      bestDistance = distance;
+    }
+  }
+
+  return bestCardsPerPlayer;
+}
+
+export function getRecommendedCardsPerPlayer(playerCount: number) {
+  return getCardsPerPlayerForDraftedCards(playerCount, SAY_LESS_TARGET_DRAFTED_CARDS);
+}
+
 export function getTeamName(room: SayLessRoom, teamIndex: number) {
   return normalizeRoom(room).team_names[teamIndex] ?? `Team ${teamIndex + 1}`;
 }
@@ -418,6 +472,8 @@ export async function createRoom(hostName: string, options?: CreateRoomOptions) 
       cards_per_player: settings.cardsPerPlayer,
       round_count: settings.roundCount,
       turn_seconds: settings.turnSeconds,
+      draft_mode: settings.draftMode,
+      host_phone_only: settings.hostPhoneOnly,
     },
   );
 
@@ -518,6 +574,8 @@ export async function updateRoomSettings(
     p_cards_per_player: nextSettings.cardsPerPlayer,
     p_round_count: nextSettings.roundCount,
     p_turn_seconds: nextSettings.turnSeconds,
+    p_draft_mode: nextSettings.draftMode,
+    p_host_phone_only: nextSettings.hostPhoneOnly,
   });
 }
 
@@ -573,6 +631,40 @@ export async function updatePlayerProfile(
   }
 
   await callRpc("sl_update_player_profile", {
+    p_room_id: roomId,
+    p_player_id: playerId,
+    p_name: normalizedName,
+    p_color: normalizedColor,
+    p_emoji: normalizedEmoji,
+  });
+}
+
+export async function kickPlayer(
+  roomId: string,
+  playerId: string,
+  targetPlayerId: string,
+) {
+  await callRpc("sl_kick_player", {
+    p_room_id: roomId,
+    p_player_id: playerId,
+    p_target_player_id: targetPlayerId,
+  });
+}
+
+export async function addHostedPlayer(
+  roomId: string,
+  playerId: string,
+  values: { name: string; color: string; emoji: string },
+) {
+  const normalizedName = normalizeName(values.name);
+  const normalizedColor = normalizeColor(values.color);
+  const normalizedEmoji = normalizeEmoji(values.emoji);
+
+  if (!normalizedName) {
+    throw new Error("Name is required.");
+  }
+
+  await callRpc("sl_host_add_player", {
     p_room_id: roomId,
     p_player_id: playerId,
     p_name: normalizedName,

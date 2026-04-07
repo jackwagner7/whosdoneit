@@ -697,6 +697,8 @@ export async function switchRoomToSayLess(
     p_cards_per_player: settings.cardsPerPlayer,
     p_round_count: settings.roundCount,
     p_turn_seconds: settings.turnSeconds,
+    p_draft_mode: settings.draftMode,
+    p_host_phone_only: settings.hostPhoneOnly,
   });
 }
 

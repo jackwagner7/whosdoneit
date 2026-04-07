@@ -20,14 +20,19 @@ import { getGameBySlug } from "@/lib/game-catalog";
 import { getStoredHostSettings as getStoredWhosDoneItHostSettings } from "@/lib/games/whosdoneit/host-settings-preferences";
 import {
   addFakePlayers,
+  addHostedPlayer,
   continueFromRoundSummary,
   getDraftBatchForPlayer,
+  getCardsPerPlayerForDraftedCards,
+  getRecommendedCardsPerPlayer,
   getRoomSnapshotByCode,
   getRoundTeamScores,
   getTeamName,
+  getTotalDraftedCards,
   hasReadyTeams,
   isTestBotName,
   joinRoom,
+  kickPlayer,
   maybeAdvanceGame,
   playAgainToLobby,
   runTestBots,
@@ -160,6 +165,21 @@ function getOptimisticTurnState(
 }
 
 function buildTeamSummaries(snapshot: SayLessSnapshot) {
+  if (snapshot.room.team_count < 2) {
+    return [...snapshot.players]
+      .sort((left, right) => right.score - left.score || left.name.localeCompare(right.name))
+      .map((player, index) => ({
+        teamIndex: index,
+        teamName: player.name,
+        color: player.color,
+        background: "#f8fafc",
+        roundScore: 0,
+        totalScore: player.score,
+        topPlayerName: player.name,
+        topPlayerScore: player.score,
+      }));
+  }
+
   const roundScores = getRoundTeamScores(snapshot, snapshot.state.current_round_index);
 
   return Array.from({ length: snapshot.room.team_count }, (_, teamIndex) => {
@@ -182,6 +202,44 @@ function buildTeamSummaries(snapshot: SayLessSnapshot) {
 }
 
 function buildRoundSummaryTeams(snapshot: SayLessSnapshot) {
+  if (snapshot.room.team_count < 2) {
+    const playerRoundScores = new Map<string, number>();
+
+    snapshot.roundResults
+      .filter((result) => result.round_index === snapshot.state.current_round_index)
+      .forEach((result) => {
+        playerRoundScores.set(
+          result.player_id,
+          (playerRoundScores.get(result.player_id) ?? 0) + result.points,
+        );
+      });
+
+    return [...snapshot.players]
+      .map((player, index) => ({
+        teamIndex: index,
+        teamName: player.name,
+        color: player.color,
+        background: "#f8fafc",
+        players: [
+          {
+            id: player.id,
+            name: player.name,
+            color: player.color,
+            emoji: player.emoji,
+            roundScore: playerRoundScores.get(player.id) ?? 0,
+          },
+        ],
+        roundTotal: playerRoundScores.get(player.id) ?? 0,
+        rounds: Array.from({ length: snapshot.state.current_round_index + 1 }, (_, roundIndex) =>
+          snapshot.roundResults
+            .filter((result) => result.round_index === roundIndex && result.player_id === player.id)
+            .reduce((sum, result) => sum + result.points, 0),
+        ),
+        total: player.score,
+      }))
+      .sort((left, right) => right.total - left.total || left.teamName.localeCompare(right.teamName));
+  }
+
   const playerRoundScores = new Map<string, number>();
   const playedRoundCount = snapshot.state.current_round_index + 1;
   const roundScoresByRound = Array.from({ length: playedRoundCount }, (_, roundIndex) =>
@@ -228,6 +286,25 @@ function buildRoundSummaryTeams(snapshot: SayLessSnapshot) {
   );
 }
 
+function canStartSayLessGame(snapshot: SayLessSnapshot) {
+  if (snapshot.room.team_count < 2) {
+    return snapshot.players.length >= 1;
+  }
+
+  const counts = Array.from({ length: snapshot.room.team_count }, () => 0);
+  snapshot.players.forEach((player) => {
+    if (
+      typeof player.team_index === "number" &&
+      player.team_index >= 0 &&
+      player.team_index < snapshot.room.team_count
+    ) {
+      counts[player.team_index] += 1;
+    }
+  });
+
+  return counts.every((count) => count >= 2);
+}
+
 export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientProps) {
   const router = useRouter();
   const normalizedCode = code.toUpperCase();
@@ -252,6 +329,9 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [changingGame, setChangingGame] = useState<GameType | null>(null);
   const [addingFakePlayers, setAddingFakePlayers] = useState(false);
+  const [addingHostedPlayer, setAddingHostedPlayer] = useState(false);
+  const [kickingPlayerId, setKickingPlayerId] = useState<string | null>(null);
+  const [hostDraftPlayerId, setHostDraftPlayerId] = useState<string | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
@@ -279,6 +359,7 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
   const refreshTimeoutRef = useRef<number | null>(null);
   const turnActionQueueRef = useRef<Promise<void>>(Promise.resolve());
   const attemptedAutoJoinRef = useRef(false);
+  const previousLobbyPlayerCountRef = useRef<number | null>(null);
   const latestSnapshotRequestIdRef = useRef(0);
   const drivingTestBotsRef = useRef(false);
   const optimisticTurnStateRef = useRef({
@@ -288,6 +369,7 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
   });
   const currentTurnKeyRef = useRef<string | null>(null);
   const knownRoundResultIdsRef = useRef<Set<string>>(new Set());
+  const [autoJoinBlocked, setAutoJoinBlocked] = useState(false);
   const [currentTurnSuccessfulCards, setCurrentTurnSuccessfulCards] = useState<
     Array<{
       id: string;
@@ -331,12 +413,14 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
   );
 
   useEffect(() => {
+    const removedMarkerKey = `removedFromRoom:${normalizedCode}`;
     const storedPlayerId =
       localStorage.getItem(`playerId:${normalizedCode}`) ??
       localStorage.getItem("playerId");
     setPlayerId(storedPlayerId);
     setJoinDefaults(getStoredPlayerPreferences());
     setSettingsDraft(getStoredHostSettings());
+    setAutoJoinBlocked(sessionStorage.getItem(removedMarkerKey) === "1");
     setReadyForJoinGate(true);
     if (initialSnapshot) {
       setSnapshot(initialSnapshot);
@@ -429,19 +513,67 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
 
   const draftRoomId = snapshot?.room.id ?? null;
   const draftPhase = snapshot?.room.phase ?? null;
-  const draftPlayerId = me?.id ?? null;
+  const isTeamless = (snapshot?.room.team_count ?? 2) < 2;
+  const hostPhoneOnly = snapshot?.state.host_phone_only === true;
+  const draftMode = snapshot?.state.draft_mode ?? settingsDraft.draftMode;
+  const isDraftless = draftMode === "draftless";
+  const draftablePlayers = useMemo(
+    () =>
+      (snapshot?.players ?? []).filter(
+        (player) => (draftCounts.get(player.id) ?? 0) < (snapshot?.state.cards_per_player ?? 0),
+      ),
+    [draftCounts, snapshot?.players, snapshot?.state.cards_per_player],
+  );
+  const draftPlayerId =
+    hostPhoneOnly && me?.is_host ? hostDraftPlayerId : me?.id ?? null;
   const myDraftCount = draftPlayerId ? (draftCounts.get(draftPlayerId) ?? 0) : 0;
   const draftCard = draftHand[0] ?? null;
+
+  useEffect(() => {
+    if (!hostPhoneOnly || !me?.is_host || draftPhase !== "drafting") {
+      setHostDraftPlayerId(null);
+      return;
+    }
+
+    if (hostDraftPlayerId && draftablePlayers.some((player) => player.id === hostDraftPlayerId)) {
+      return;
+    }
+
+    setHostDraftPlayerId(null);
+  }, [draftPhase, draftablePlayers, hostDraftPlayerId, hostPhoneOnly, me?.is_host]);
 
   useEffect(() => {
     if (!snapshot || !me) {
       return;
     }
 
+    sessionStorage.removeItem(`removedFromRoom:${snapshot.room.code}`);
+    setAutoJoinBlocked(false);
     localStorage.setItem("playerId", me.id);
     localStorage.setItem(`playerId:${snapshot.room.code}`, me.id);
     setStoredPlayerPreferences({ name: me.name, color: me.color, emoji: me.emoji });
   }, [me, snapshot]);
+
+  useEffect(() => {
+    if (!snapshot || !playerId || me) {
+      return;
+    }
+
+    const storedRoomPlayerId = localStorage.getItem(`playerId:${normalizedCode}`);
+    if (storedRoomPlayerId !== playerId) {
+      return;
+    }
+
+    localStorage.removeItem(`playerId:${normalizedCode}`);
+    if (localStorage.getItem("playerId") === playerId) {
+      localStorage.removeItem("playerId");
+    }
+    sessionStorage.setItem(`removedFromRoom:${normalizedCode}`, "1");
+    attemptedAutoJoinRef.current = true;
+    setAutoJoinBlocked(true);
+    setJoinError("The host removed you from this room.");
+    setPlayerId(null);
+  }, [me, normalizedCode, playerId, snapshot]);
 
   useEffect(() => {
     if (!snapshot || !me?.is_host) {
@@ -453,8 +585,59 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
       cardsPerPlayer: snapshot.state.cards_per_player,
       roundCount: snapshot.state.round_count,
       turnSeconds: snapshot.state.turn_seconds,
+      draftMode: snapshot.state.draft_mode,
+      hostPhoneOnly: snapshot.state.host_phone_only,
     });
   }, [me, snapshot]);
+
+  useEffect(() => {
+    if (!snapshot || !me?.is_host || snapshot.room.phase !== "lobby") {
+      previousLobbyPlayerCountRef.current = null;
+      return;
+    }
+
+    const playerCount = snapshot.players.length;
+    const recommendedCardsPerPlayer = getRecommendedCardsPerPlayer(playerCount);
+    const previousPlayerCount = previousLobbyPlayerCountRef.current;
+    previousLobbyPlayerCountRef.current = playerCount;
+
+    if (
+      previousPlayerCount !== null &&
+      playerCount <= previousPlayerCount
+    ) {
+      return;
+    }
+
+    setSettingsDraft((current) =>
+      current.cardsPerPlayer === recommendedCardsPerPlayer
+        ? current
+        : { ...current, cardsPerPlayer: recommendedCardsPerPlayer },
+    );
+
+    if (snapshot.state.cards_per_player === recommendedCardsPerPlayer) {
+      return;
+    }
+
+    const nextSettings = {
+      teamCount: snapshot.room.team_count,
+      cardsPerPlayer: recommendedCardsPerPlayer,
+      roundCount: snapshot.state.round_count,
+      turnSeconds: snapshot.state.turn_seconds,
+      draftMode: snapshot.state.draft_mode,
+      hostPhoneOnly: snapshot.state.host_phone_only,
+    };
+
+    void updateRoomSettings(snapshot.room.id, me.id, nextSettings)
+      .then(async () => {
+        setStoredHostSettings(nextSettings);
+        await loadSnapshot();
+      })
+      .catch((issue) => {
+        setActionError(
+          issue instanceof Error ? issue.message : "Could not refresh draft settings.",
+        );
+      });
+  }, [loadSnapshot, me, snapshot]);
 
   const openProfileSettings = useCallback(() => {
     if (!me) {
@@ -583,11 +766,13 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
           values.color,
           values.emoji,
         );
-        setStoredPlayerPreferences({
+      setStoredPlayerPreferences({
           name: player.name,
           color: player.color,
           emoji: player.emoji,
         });
+        sessionStorage.removeItem(`removedFromRoom:${room.code}`);
+        setAutoJoinBlocked(false);
         localStorage.setItem("playerId", player.id);
         localStorage.setItem(`playerId:${room.code}`, player.id);
         setPlayerId(player.id);
@@ -602,7 +787,7 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
   );
 
   useEffect(() => {
-    if (loading || error || !snapshot || me || joinLoading) {
+    if (loading || error || !snapshot || me || joinLoading || autoJoinBlocked) {
       return;
     }
 
@@ -622,7 +807,7 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
       color: storedPreferences.color,
       emoji: storedPreferences.emoji,
     });
-  }, [error, handleInlineJoin, joinLoading, loading, me, snapshot]);
+  }, [autoJoinBlocked, error, handleInlineJoin, joinLoading, loading, me, snapshot]);
 
   const handleSaveSettings = useCallback(async () => {
     if (!snapshot || !me) {
@@ -635,7 +820,9 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
     setActionError(null);
 
     try {
-      await updateTeamName(snapshot.room.id, me.id, teamNameDraft);
+      if (snapshot.room.team_count > 1 && teamNameDraft.trim()) {
+        await updateTeamName(snapshot.room.id, me.id, teamNameDraft);
+      }
       if (allowHostControls) {
         await updateRoomSettings(snapshot.room.id, me.id, settingsDraft);
         setStoredHostSettings(settingsDraft);
@@ -668,6 +855,49 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
       }
     },
     [loadSnapshot, me, snapshot, testingEnabled],
+  );
+
+  const handleKickPlayer = useCallback(
+    async (targetPlayerId: string) => {
+      if (!snapshot || !me?.is_host || snapshot.room.phase !== "lobby") {
+        return;
+      }
+
+      setKickingPlayerId(targetPlayerId);
+      setActionError(null);
+
+      try {
+        await kickPlayer(snapshot.room.id, me.id, targetPlayerId);
+        await loadSnapshot();
+      } catch (issue) {
+        setActionError(issue instanceof Error ? issue.message : "Could not remove player.");
+      } finally {
+        setKickingPlayerId(null);
+      }
+    },
+    [loadSnapshot, me, snapshot],
+  );
+
+  const handleAddHostedPlayer = useCallback(
+    async (values: { name: string; color: string; emoji: string }) => {
+      if (!snapshot || !me?.is_host || snapshot.room.phase !== "lobby") {
+        return;
+      }
+
+      setAddingHostedPlayer(true);
+      setActionError(null);
+
+      try {
+        await addHostedPlayer(snapshot.room.id, me.id, values);
+        await loadSnapshot();
+      } catch (issue) {
+        setActionError(issue instanceof Error ? issue.message : "Could not add player.");
+        throw issue;
+      } finally {
+        setAddingHostedPlayer(false);
+      }
+    },
+    [loadSnapshot, me, snapshot],
   );
 
   const handleChangeGame = useCallback(
@@ -776,6 +1006,8 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
       cardsPerPlayer: snapshot.state.cards_per_player,
       roundCount: snapshot.state.round_count,
       turnSeconds: snapshot.state.turn_seconds,
+      draftMode: snapshot.state.draft_mode,
+      hostPhoneOnly: snapshot.state.host_phone_only,
     });
     setTeamNameDraft(
       typeof me?.team_index === "number" ? getTeamName(snapshot.room, me.team_index) : "",
@@ -833,7 +1065,21 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
   );
 
   useEffect(() => {
-    if (!snapshot || !draftRoomId || !draftPlayerId || draftPhase !== "drafting") {
+    if (!snapshot || !draftRoomId || draftPhase !== "drafting") {
+      setDraftHand([]);
+      setDraftBatchLoading(false);
+      setDraftDuplicateCount(0);
+      return;
+    }
+
+    if (hostPhoneOnly && me?.is_host && !draftPlayerId) {
+      setDraftHand([]);
+      setDraftBatchLoading(false);
+      setDraftDuplicateCount(0);
+      return;
+    }
+
+    if (!draftPlayerId) {
       setDraftHand([]);
       setDraftBatchLoading(false);
       setDraftDuplicateCount(0);
@@ -889,6 +1135,8 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
     draftPhase,
     draftPlayerId,
     draftRoomId,
+    hostPhoneOnly,
+    me?.is_host,
     myDraftCount,
     snapshot,
   ]);
@@ -1054,15 +1302,19 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
   }
 
   const teamSummaries = buildTeamSummaries(snapshot);
+  const playerCount = snapshot.players.length;
+  const draftedCards = getTotalDraftedCards(playerCount, settingsDraft.cardsPerPlayer);
   const currentRoundNumber = snapshot.state.current_round_index + 1;
   const roundSummaryTeams = buildRoundSummaryTeams(snapshot);
-  const canStart = hasReadyTeams(snapshot.players, snapshot.room.team_count);
+  const canStart = canStartSayLessGame(snapshot);
   const totalDraftTarget = snapshot.players.length * snapshot.state.cards_per_player;
   const doneDrafting =
     myDraftCount >= snapshot.state.cards_per_player ||
     snapshot.roomCards.length >= totalDraftTarget;
   const activePlayer =
     snapshot.players.find((player) => player.id === snapshot.state.active_player_id) ?? null;
+  const hostControlsAllTurns = snapshot.state.host_phone_only && me.is_host;
+  const meCanControlCurrentTurn = hostControlsAllTurns || me.id === activePlayer?.id;
   const turnPaused =
     typeof snapshot.state.paused_turn_seconds_remaining === "number";
   const optimisticPassedSet = new Set(optimisticPassedCardIds);
@@ -1072,15 +1324,21 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
   const activeCard =
     snapshot.roomCards.find((card) => card.id === currentTurnCardId) ?? null;
   const activeTeamName =
-    typeof activePlayer?.team_index === "number"
+    snapshot.room.team_count < 2
+      ? "Solo"
+      : typeof activePlayer?.team_index === "number"
       ? getTeamName(snapshot.room, activePlayer.team_index)
       : "No team";
   const activeTeamColor =
-    typeof activePlayer?.team_index === "number"
+    snapshot.room.team_count < 2
+      ? (activePlayer?.color ?? "#0f172a")
+      : typeof activePlayer?.team_index === "number"
       ? (SAY_LESS_TEAM_PALETTE[activePlayer.team_index]?.color ?? "#0f172a")
       : "#0f172a";
   const activeTeamBackground =
-    typeof activePlayer?.team_index === "number"
+    snapshot.room.team_count < 2
+      ? "#f8fafc"
+      : typeof activePlayer?.team_index === "number"
       ? (SAY_LESS_TEAM_PALETTE[activePlayer.team_index]?.background ?? "#f8fafc")
       : "#f8fafc";
   const turnStarted = Boolean(
@@ -1091,9 +1349,12 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
         optimisticTurnCardId
       ),
   );
-  const remainingCards = snapshot.roomCards.filter(
-    (card) => getEffectiveCardStatus(card, optimisticPassedSet, optimisticClearedSet) !== "cleared",
-  ).length;
+  const remainingCards = isDraftless
+    ? 0
+    : snapshot.roomCards.filter(
+        (card) =>
+          getEffectiveCardStatus(card, optimisticPassedSet, optimisticClearedSet) !== "cleared",
+      ).length;
   const allowHostControls = me.is_host && snapshot.room.phase === "lobby";
   const playStageBusy = Boolean(busyAction) || pendingTurnActions > 0;
   const isLobby = snapshot.room.phase === "lobby";
@@ -1217,17 +1478,50 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
               card={draftCard}
               doneDrafting={doneDrafting}
               draftedCount={myDraftCount}
+              draftingLabel={
+                hostPhoneOnly && me.is_host && draftPlayerId
+                  ? `${snapshot.players.find((player) => player.id === draftPlayerId)?.name ?? "Player"} picks`
+                  : hostPhoneOnly && me.is_host
+                  ? "Choose player"
+                  : "Your picks"
+              }
               duplicateCount={draftDuplicateCount}
               loadingCard={draftBatchLoading}
+              onSelectPlayer={setHostDraftPlayerId}
               onKeep={() =>
                 runAction("draft-keep", async () => {
-                  if (!draftCard) {
+                  if (!draftCard || !draftPlayerId) {
                     return;
                   }
 
                   const wasLastCardInHand = draftHand.length <= 1;
                   try {
-                    await submitDraftDecision(snapshot.room.id, me.id, draftCard.id, true);
+                    await submitDraftDecision(snapshot.room.id, draftPlayerId, draftCard.id, true);
+                  } catch (issue) {
+                    setDraftHand([]);
+                    await loadSnapshot();
+                    throw issue;
+                  }
+                  setDraftHand((current) =>
+                    current.filter((card) => card.id !== draftCard.id),
+                  );
+                  if (wasLastCardInHand) {
+                    setDraftBatchLoading(true);
+                  }
+                  if ((draftCounts.get(draftPlayerId) ?? 0) + 1 >= snapshot.state.cards_per_player) {
+                    setHostDraftPlayerId(null);
+                  }
+                })
+              }
+              onSkip={() =>
+                runAction("draft-skip", async () => {
+                  if (!draftCard || !draftPlayerId) {
+                    return;
+                  }
+
+                  const wasLastCardInHand = draftHand.length <= 1;
+                  try {
+                    await submitDraftDecision(snapshot.room.id, draftPlayerId, draftCard.id, false);
                   } catch (issue) {
                     setDraftHand([]);
                     await loadSnapshot();
@@ -1241,27 +1535,13 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
                   }
                 })
               }
-              onSkip={() =>
-                runAction("draft-skip", async () => {
-                  if (!draftCard) {
-                    return;
-                  }
-
-                  const wasLastCardInHand = draftHand.length <= 1;
-                  try {
-                    await submitDraftDecision(snapshot.room.id, me.id, draftCard.id, false);
-                  } catch (issue) {
-                    setDraftHand([]);
-                    await loadSnapshot();
-                    throw issue;
-                  }
-                  setDraftHand((current) =>
-                    current.filter((card) => card.id !== draftCard.id),
-                  );
-                  if (wasLastCardInHand) {
-                    setDraftBatchLoading(true);
-                  }
-                })
+              selectablePlayers={hostPhoneOnly && me.is_host ? draftablePlayers : []}
+              selectedPlayerName={
+                hostPhoneOnly && me.is_host
+                  ? (draftPlayerId
+                      ? (snapshot.players.find((player) => player.id === draftPlayerId)?.name ?? null)
+                      : null)
+                  : "Self"
               }
               targetCount={snapshot.state.cards_per_player}
               totalDrafted={snapshot.roomCards.length}
@@ -1276,10 +1556,11 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
               activeTeamColor={activeTeamColor}
               activeTeamName={activeTeamName}
               busy={playStageBusy}
-              card={me.id === activePlayer?.id ? activeCard : null}
+              card={meCanControlCurrentTurn ? activeCard : null}
               deadlineAt={snapshot.state.turn_deadline_at}
+              infiniteCards={isDraftless}
               isHost={me.is_host}
-              meIsActive={me.id === activePlayer?.id}
+              meIsActive={meCanControlCurrentTurn}
               onStartTurn={() =>
                 runAction("start-turn", async () => {
                   clearOptimisticTurn();
@@ -1314,6 +1595,7 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
               busy={Boolean(busyAction)}
               hostPlayer={hostPlayer}
               isHost={me.is_host}
+              isTeamless={isTeamless}
               onContinue={() =>
                 runAction("continue", async () => {
                   await continueFromRoundSummary(snapshot.room.id, me.id);
@@ -1330,6 +1612,7 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
               busy={Boolean(busyAction)}
               hostPlayer={hostPlayer}
               isHost={me.is_host}
+              isTeamless={isTeamless}
               onPlayAgain={() =>
                 runAction("play-again", async () => {
                   await playAgainToLobby(snapshot.room.id, me.id);
@@ -1342,18 +1625,39 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
 
         <SettingsSheet
           addingFakePlayers={addingFakePlayers}
+          addingHostedPlayer={addingHostedPlayer}
           allowTesting={testingEnabled}
           allowFakePlayers={allowHostControls}
           allowHostControls={allowHostControls}
+          allowKickPlayers={allowHostControls}
           cardsPerPlayer={settingsDraft.cardsPerPlayer}
           changingGame={changingGame}
           currentGame="sayless"
+          currentPlayerId={me.id}
+          draftedCards={draftedCards}
+          draftMode={settingsDraft.draftMode}
+          hostPhoneOnly={settingsDraft.hostPhoneOnly}
           isHost={me.is_host}
+          kickingPlayerId={kickingPlayerId}
           onAddFakePlayers={handleAddFakePlayers}
+          onAddHostedPlayer={handleAddHostedPlayer}
           onCardsPerPlayerChange={(cardsPerPlayer) =>
             setSettingsDraft((current) => ({ ...current, cardsPerPlayer }))
           }
+          onDraftedCardsChange={(nextDraftedCards) =>
+            setSettingsDraft((current) => ({
+              ...current,
+              cardsPerPlayer: getCardsPerPlayerForDraftedCards(playerCount, nextDraftedCards),
+            }))
+          }
+          onDraftModeChange={(draftMode) =>
+            setSettingsDraft((current) => ({ ...current, draftMode }))
+          }
           onGameChange={handleChangeGame}
+          onHostPhoneOnlyChange={(hostPhoneOnly) =>
+            setSettingsDraft((current) => ({ ...current, hostPhoneOnly }))
+          }
+          onKickPlayer={handleKickPlayer}
           onClose={() => setSettingsOpen(false)}
           onRoundCountChange={(roundCount) =>
             setSettingsDraft((current) => ({ ...current, roundCount }))
@@ -1367,6 +1671,8 @@ export function SayLessRoomClient({ code, initialSnapshot = null }: RoomClientPr
             setSettingsDraft((current) => ({ ...current, turnSeconds }))
           }
           open={settingsOpen}
+          playerCount={playerCount}
+          players={snapshot.players}
           roundCount={settingsDraft.roundCount}
           saving={settingsSaving}
           teamCount={settingsDraft.teamCount}

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CountdownBadge } from "@/components/countdown-badge";
 import { PlayerBox } from "@/components/player-box";
-import { StageFooter, StageFooterMessage } from "@/components/stage-footer";
+import { StageFooter, StageFooterButton, StageFooterMessage } from "@/components/stage-footer";
 import { StageHeader } from "@/components/stage-header";
 import { StageShell } from "@/components/stage-shell";
 
@@ -426,22 +426,14 @@ export function RevealingStage({
       </div>
       {truthShown && canControl ? (
         <StageFooter>
-          <button
-            className="grid w-full grid-cols-[4.75rem_1fr_4.75rem] items-stretch overflow-hidden rounded-2xl bg-black text-xl font-bold text-white disabled:opacity-60"
+          <StageFooterButton
+            busy={busy}
             disabled={busy}
+            deadlineAt={deadlineAt}
             onClick={() => void onNext()}
-            type="button"
           >
-            <span aria-hidden="true" />
-            <span className="flex items-center justify-center px-4 py-3 text-center">
-              {busy ? "..." : "Next"}
-            </span>
-            {!busy ? (
-              <CountdownBadge deadlineAt={deadlineAt} variant="button-dark" />
-            ) : (
-              <span aria-hidden="true" className="border-l border-white/20" />
-            )}
-          </button>
+            {busy ? "..." : "Next"}
+          </StageFooterButton>
         </StageFooter>
       ) : truthShown ? (
         <StageFooter>

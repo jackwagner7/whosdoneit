@@ -35,7 +35,7 @@ create table if not exists public.rooms (
       'finished'
     )
   ),
-  constraint rooms_team_count_check check (team_count between 2 and 5),
+  constraint rooms_team_count_check check (team_count between 1 and 5),
   constraint rooms_prompt_seconds_check check (prompt_seconds between 5 and 180),
   constraint rooms_round_count_check check (round_count between 1 and 10),
   constraint rooms_answering_seconds_check check (answering_seconds between 5 and 180),
@@ -110,8 +110,7 @@ create table if not exists public.sayless_room_cards (
   created_at timestamptz not null default now(),
   constraint sayless_room_cards_status_check check (
     status in ('pending', 'passed', 'cleared')
-  ),
-  constraint sayless_room_cards_room_card_unique unique (room_id, card_id)
+  )
 );
 
 create table if not exists public.sayless_room_state (
@@ -119,17 +118,25 @@ create table if not exists public.sayless_room_state (
   cards_per_player integer not null default 8,
   round_count integer not null default 3,
   turn_seconds integer not null default 60,
+  draft_mode text not null default 'manual',
+  host_phone_only boolean not null default false,
   current_round_index integer not null default 0,
   starting_team_index integer not null default 0,
   active_team_index integer not null default 0,
   active_player_id uuid references public.players(id) on delete set null,
   active_card_entry_id uuid references public.sayless_room_cards(id) on delete set null,
   turn_deadline_at timestamptz,
+  paused_turn_seconds_remaining integer,
   team_turn_counts integer[] not null default array[]::integer[],
   created_at timestamptz not null default now(),
-  constraint sayless_room_state_cards_per_player_check check (cards_per_player between 3 and 12),
+  constraint sayless_room_state_cards_per_player_check check (cards_per_player between 3 and 20),
   constraint sayless_room_state_round_count_check check (round_count between 1 and 5),
-  constraint sayless_room_state_turn_seconds_check check (turn_seconds between 15 and 180)
+  constraint sayless_room_state_turn_seconds_check check (turn_seconds between 15 and 180),
+  constraint sayless_room_state_draft_mode_check check (draft_mode in ('manual', 'autodraft', 'draftless')),
+  constraint sayless_room_state_paused_turn_seconds_remaining_check check (
+    paused_turn_seconds_remaining is null
+    or paused_turn_seconds_remaining between 0 and 180
+  )
 );
 
 create table if not exists public.sayless_draft_rejections (
@@ -144,6 +151,7 @@ create table if not exists public.sayless_draft_hands (
   room_id uuid not null references public.rooms(id) on delete cascade,
   player_id uuid not null references public.players(id) on delete cascade,
   card_id uuid not null references public.sayless_cards(id) on delete cascade,
+  slot_index integer not null default 0,
   created_at timestamptz not null default now(),
   primary key (room_id, player_id),
   constraint sayless_draft_hands_room_card_unique unique (room_id, card_id)
@@ -177,6 +185,7 @@ create index if not exists sayless_room_cards_room_id_idx on public.sayless_room
 create index if not exists sayless_room_cards_status_idx on public.sayless_room_cards (room_id, status, sort_order);
 create index if not exists sayless_draft_rejections_room_player_idx on public.sayless_draft_rejections (room_id, player_id);
 create index if not exists sayless_draft_hands_room_id_idx on public.sayless_draft_hands (room_id);
+create unique index if not exists sayless_draft_hands_room_player_slot_unique on public.sayless_draft_hands (room_id, player_id, slot_index);
 create index if not exists sayless_round_results_room_round_idx on public.sayless_round_results (room_id, round_index);
 
 with seed(title, description, points) as (
